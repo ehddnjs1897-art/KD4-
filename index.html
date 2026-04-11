@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>넘버블럭스 테트리스</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="sidebar-left">
+            <div id="hold-box">
+                <h3>HOLD</h3>
+                <canvas id="hold-canvas" width="120" height="120"></canvas>
+            </div>
+        </div>
+        <div id="board-wrapper">
+            <h1 id="game-title">넘버블럭스 테트리스</h1>
+            <canvas id="game-board"></canvas>
+            <div id="game-over-screen">
+                <div id="game-over-content">
+                    <h2>게임 오버!</h2>
+                    <p>점수: <span id="final-score">0</span></p>
+                    <p>레벨: <span id="final-level">1</span></p>
+                    <button id="restart-btn" onclick="restartGame()">다시 시작</button>
+                </div>
+            </div>
+        </div>
+        <div id="sidebar-right">
+            <div id="score-box">
+                <h3>점수</h3>
+                <p id="score">0</p>
+            </div>
+            <div id="level-box">
+                <h3>레벨</h3>
+                <p id="level">1</p>
+            </div>
+            <div id="lines-box">
+                <h3>라인</h3>
+                <p id="lines">0</p>
+            </div>
+            <div id="next-box">
+                <h3>NEXT</h3>
+                <canvas id="next-canvas" width="120" height="240"></canvas>
+            </div>
+        </div>
+    </div>
+    <div id="controls-info">
+        <p>← → 이동 | ↑ 회전 | ↓ 소프트드롭 | Space 하드드롭 | C 홀드</p>
+    </div>
+    <div id="mobile-controls">
+        <div id="mobile-controls-row1">
+            <button class="mobile-btn" id="btn-hold" ontouchstart="mobileHold(event)" onclick="mobileHold(event)">H</button>
+            <button class="mobile-btn mobile-btn-large" id="btn-rotate" ontouchstart="mobileRotate(event)" onclick="mobileRotate(event)">↻</button>
+            <button class="mobile-btn mobile-btn-large" id="btn-drop" ontouchstart="mobileHardDrop(event)" onclick="mobileHardDrop(event)">⤓</button>
+        </div>
+        <div id="mobile-controls-row2">
+            <button class="mobile-btn mobile-btn-large" id="btn-left" ontouchstart="mobileLeft(event)" onclick="mobileLeft(event)">◀</button>
+            <button class="mobile-btn mobile-btn-large" id="btn-down" ontouchstart="mobileDown(event)" onclick="mobileDown(event)">▼</button>
+            <button class="mobile-btn mobile-btn-large" id="btn-right" ontouchstart="mobileRight(event)" onclick="mobileRight(event)">▶</button>
+        </div>
+    </div>
+    <div id="start-screen">
+        <div id="start-content">
+            <h1>🔢 넘버블럭스 테트리스 🔢</h1>
+            <p>숫자 블럭들이 하늘에서 내려와요!</p>
+            <p>줄을 완성하면 넘버블럭스 친구들이 사라져요!</p>
+            <div id="start-characters">
+                <span class="char-preview" style="background:#E74C3C">1</span>
+                <span class="char-preview" style="background:#E67E22">2</span>
+                <span class="char-preview" style="background:#F1C40F;color:#333">3</span>
+                <span class="char-preview" style="background:#2ECC71">4</span>
+                <span class="char-preview" style="background:#3498DB">5</span>
+            </div>
+            <button id="start-btn" onclick="startGame()">게임 시작!</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

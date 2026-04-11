@@ -5,64 +5,21 @@ assistants when working with this repository.
 
 ## Repository Status
 
-**This repository is currently uninitialized.** At the time this document was
-written, the repository contains no source code, no commit history, and no
-configuration files — only the `.git` directory and this `CLAUDE.md`.
-
 - **Repository**: `ehddnjs1897-art/KD4-`
-- **Default working branch for Claude**: `claude/add-claude-documentation-wN4sX`
-- **Language / stack**: not yet chosen
-- **Build system**: not yet chosen
+- **Project**: Numberblocks Tetris Game (넘버블럭스 테트리스)
+- **Language / stack**: HTML / CSS / vanilla JavaScript
+- **Build system**: None (static files, open `index.html` in browser)
 - **Tests**: none
-
-Because the project has not been scaffolded, there is no existing architecture,
-module layout, or set of conventions to describe. Sections below that would
-normally document the stack (build, test, lint, entry points, etc.) are
-intentionally left as placeholders. **Update this file as soon as the project
-is scaffolded** so future AI sessions have accurate guidance.
-
-## For the First Contributor / First AI Session
-
-When the project gets its first real commits, the agent doing that work should:
-
-1. Decide the language and tooling with the user (do not guess).
-2. Add a minimal but runnable scaffold (entry point, dependency manifest,
-   README).
-3. Immediately update this `CLAUDE.md` with the actual structure, commands,
-   and conventions — do not leave the placeholder text in place once real code
-   exists.
-4. Commit the scaffold and the updated `CLAUDE.md` together.
-
-Do not invent a stack, framework, or directory layout in order to fill this
-file out. If you are unsure what the project is supposed to be, ask the user
-first.
 
 ## Codebase Structure
 
-_No source tree yet._ Once the project is scaffolded, document:
-
-- Top-level directories and what each one is for
-- Where the entry point lives
-- How modules are organized (by feature, by layer, etc.)
-- Where tests live relative to the code they cover
-- Any generated / vendored directories that should be ignored
+- `index.html` — Entry point, game page structure
+- `style.css` — All styling including responsive mobile layout
+- `game.js` — Game logic (board, pieces, controls, rendering)
 
 ## Development Workflows
 
-_No tooling configured yet._ Once chosen, document the exact commands here so
-AI assistants can run them without guessing. Typical entries:
-
-- **Install dependencies**: _TBD_
-- **Run the app locally**: _TBD_
-- **Run tests**: _TBD_
-- **Run a single test**: _TBD_
-- **Lint**: _TBD_
-- **Format**: _TBD_
-- **Type-check**: _TBD_
-- **Build / package**: _TBD_
-
-Prefer documenting one canonical command per task. If there are multiple ways
-to run something, pick the one contributors are expected to use.
+- **Run the app locally**: Open `index.html` in a browser (no server needed)
 
 ## Git & Branch Conventions
 
@@ -107,20 +64,12 @@ Be conservative with GitHub side effects:
 - Do not create issues or PRs without explicit user instruction.
 - Never force-push to `main` even if asked; warn the user instead.
 
-## Coding Conventions (to be filled in)
+## Coding Conventions
 
-Once code exists, document here:
-
-- Naming conventions (files, types, functions, constants)
-- Import ordering / module boundaries
-- Error-handling style
-- Logging style
-- Any project-specific idioms that an AI should match rather than "improve"
-
-Until then, a Claude session adding first code to this repository should
-default to the idiomatic style of whatever language is chosen, and should
-**not** introduce speculative abstractions, config layers, or helper
-utilities beyond what the immediate task needs.
+- Vanilla JavaScript (no frameworks/bundlers)
+- camelCase for functions and variables, UPPER_SNAKE for constants
+- Game state is module-level variables in `game.js`
+- Canvas 2D API for all rendering
 
 ## Things Not To Do
 
