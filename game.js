@@ -79,7 +79,9 @@ const LINE_SCORES = [0, 100, 300, 500, 800];
 let audioCtx = null;
 let bgmPlaying = false;
 let bgmGain = null;
+let sfxGain = null;
 let bgmTimeout = null;
+let bgmNodes = [];
 let musicEnabled = true;
 let sfxEnabled = true;
 
@@ -89,6 +91,9 @@ function initAudio() {
     bgmGain = audioCtx.createGain();
     bgmGain.gain.value = 0.18;
     bgmGain.connect(audioCtx.destination);
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.5;
+    sfxGain.connect(audioCtx.destination);
 }
 
 function playNote(freq, duration, startTime, gain, type, dest) {
@@ -99,9 +104,17 @@ function playNote(freq, duration, startTime, gain, type, dest) {
     g.gain.setValueAtTime(gain || 0.15, startTime);
     g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
     osc.connect(g);
-    g.connect(dest || audioCtx.destination);
+    g.connect(dest || sfxGain);
     osc.start(startTime);
     osc.stop(startTime + duration);
+    // Track BGM nodes so we can kill them on stop
+    if (dest === bgmGain) {
+        bgmNodes.push(osc);
+        osc.onended = () => {
+            const idx = bgmNodes.indexOf(osc);
+            if (idx >= 0) bgmNodes.splice(idx, 1);
+        };
+    }
 }
 
 // Numberblocks-style happy melody (loops)
@@ -174,18 +187,18 @@ function startBGM() {
 function playBGMLoop() {
     if (!bgmPlaying || !musicEnabled) return;
     const now = audioCtx.currentTime;
-    let t = now + 0.05;
+    let t = now + 0.1;
     for (const note of BGM_MELODY) {
         if (note.n > 0) {
-            playNote(note.n, note.d * 0.9, t, 0.12, 'square', bgmGain);
-            playNote(note.n * 0.5, note.d * 0.9, t, 0.06, 'triangle', bgmGain);
+            playNote(note.n, note.d * 0.85, t, 0.12, 'square', bgmGain);
+            playNote(note.n * 0.5, note.d * 0.85, t, 0.06, 'triangle', bgmGain);
         }
         t += note.d;
     }
     const loopDuration = (t - now) * 1000;
     bgmTimeout = setTimeout(() => {
         if (bgmPlaying && musicEnabled) playBGMLoop();
-    }, loopDuration - 50);
+    }, loopDuration + 100);
 }
 
 function stopBGM() {
@@ -194,6 +207,11 @@ function stopBGM() {
         clearTimeout(bgmTimeout);
         bgmTimeout = null;
     }
+    // Kill all currently playing BGM notes immediately
+    for (const osc of bgmNodes) {
+        try { osc.stop(0); } catch (e) {}
+    }
+    bgmNodes = [];
 }
 
 // Sound effects
