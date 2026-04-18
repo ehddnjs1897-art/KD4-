@@ -7,6 +7,7 @@ from telegram import Bot
 from daily_scout import run_daily_scout
 from agent_engine import run_agent
 from task_queue import next_task, complete_task, list_tasks
+from memory import memory_write
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +104,18 @@ async def send_daily_report(bot: Bot):
         logger.error(f"Daily report failed: {e}")
 
 
+LEARNING_PROMPT = """다음은 방금 완료한 작업과 결과입니다.
+
+작업: {task}
+결과 요약: {result}
+
+이 작업에서 사용자가 자주 원할 만한 패턴, 선호도, 반복 가능한 교훈을 1-2줄로 뽑아주세요.
+없으면 "없음"만 답하세요. 마크다운 금지, 한 줄로.
+"""
+
+
 async def process_task_queue(bot: Bot, max_tasks: int = 3) -> int:
-    """대기 중인 작업 큐를 우선순위 순으로 처리."""
+    """대기 중인 작업 큐를 우선순위 순으로 처리 + 자동 학습."""
     processed = 0
     for _ in range(max_tasks):
         task = next_task()
@@ -119,6 +130,19 @@ async def process_task_queue(bot: Bot, max_tasks: int = 3) -> int:
             result = await run_agent(task["text"], progress_callback=progress)
             complete_task(task["id"], result)
             await _send(bot, f"✅ 큐 작업 완료 [{task['id']}]\n{result[:500]}")
+
+            # 자동 학습 — 비동기로 교훈 추출
+            try:
+                lesson_prompt = LEARNING_PROMPT.format(
+                    task=task["text"][:200], result=result[:500]
+                )
+                lesson = await run_agent(lesson_prompt)
+                lesson = lesson.strip()
+                if lesson and "없음" not in lesson and len(lesson) < 300:
+                    memory_write("fact", lesson)
+            except Exception:
+                pass
+
             processed += 1
         except Exception as e:
             logger.error(f"Queue task {task['id']} failed: {e}")

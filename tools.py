@@ -170,6 +170,17 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "see_screen",
+        "description": "현재 맥 화면을 캡처하고 Claude가 보이는 것을 설명 (OCR + 비전)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "화면에서 확인하고 싶은 것 (optional)"}
+            },
+            "required": []
+        }
+    },
+    {
         "name": "system_info",
         "description": "맥 시스템 정보: 배터리, 디스크, 메모리, CPU 부하, 업타임",
         "input_schema": {"type": "object", "properties": {}, "required": []}
@@ -389,6 +400,29 @@ async def execute_tool(name: str, inputs: dict) -> str:
 
         elif name == "mac_screenshot":
             return mac_screenshot(inputs.get("path", ""))
+
+        elif name == "see_screen":
+            path = mac_screenshot()
+            if not os.path.isfile(path):
+                return f"스크린샷 실패: {path}"
+            question = inputs.get("question", "")
+            vision_prompt = (
+                f"이 이미지는 방금 캡처한 맥 화면입니다. "
+                f"화면에 보이는 내용을 한국어로 간결하게 요약하고 "
+                f"중요한 텍스트/앱/창 상태를 알려주세요. "
+                f"{'특히 확인할 것: ' + question if question else ''}"
+            )
+            try:
+                result = subprocess.run(
+                    ["claude", "-p", vision_prompt, "--model", "claude-sonnet-4-6",
+                     "--dangerously-skip-permissions", path],
+                    capture_output=True, text=True, timeout=180
+                )
+                if result.returncode != 0:
+                    return f"비전 분석 실패: {result.stderr[:300]}"
+                return f"[화면 분석]\n{result.stdout.strip()}\n\n(이미지: {path})"
+            except subprocess.TimeoutExpired:
+                return "비전 분석 시간 초과 (180s)"
 
         elif name == "system_info":
             return system_info()
