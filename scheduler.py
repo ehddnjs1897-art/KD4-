@@ -6,6 +6,7 @@ from pathlib import Path
 from telegram import Bot
 from daily_scout import run_daily_scout
 from agent_engine import run_agent
+from task_queue import next_task, complete_task, list_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +103,39 @@ async def send_daily_report(bot: Bot):
         logger.error(f"Daily report failed: {e}")
 
 
+async def process_task_queue(bot: Bot, max_tasks: int = 3) -> int:
+    """대기 중인 작업 큐를 우선순위 순으로 처리."""
+    processed = 0
+    for _ in range(max_tasks):
+        task = next_task()
+        if not task:
+            break
+        try:
+            await _send(bot, f"📝 큐 작업 시작 [{task['id']}] {task['priority']}\n{task['text']}")
+
+            async def progress(msg: str):
+                await _send(bot, msg)
+
+            result = await run_agent(task["text"], progress_callback=progress)
+            complete_task(task["id"], result)
+            await _send(bot, f"✅ 큐 작업 완료 [{task['id']}]\n{result[:500]}")
+            processed += 1
+        except Exception as e:
+            logger.error(f"Queue task {task['id']} failed: {e}")
+            complete_task(task["id"], f"오류: {e}")
+            await _send(bot, f"⚠️ 작업 실패 [{task['id']}]: {e}")
+    return processed
+
+
 async def run_auto_work(bot: Bot, night_mode: bool = False):
-    """스스로 할 일 찾아서 실행."""
-    prompt = NIGHT_PROMPT if night_mode else DAYTIME_PROMPT
-    label = "🌙 새벽 심층 작업" if night_mode else "🤖 자율 작업"
+    """스스로 할 일 찾아서 실행. 큐 우선 소화 → 자율 탐색."""
     try:
+        queued = await process_task_queue(bot, max_tasks=3 if not night_mode else 10)
+        if queued > 0 and not night_mode:
+            return
+
+        prompt = NIGHT_PROMPT if night_mode else DAYTIME_PROMPT
+        label = "🌙 새벽 심층 작업" if night_mode else "🤖 자율 작업"
         await _send(bot, f"{label} 시작...")
 
         async def progress(msg: str):

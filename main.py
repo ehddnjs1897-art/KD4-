@@ -1,6 +1,9 @@
 import asyncio
 import logging
 import os
+import sys
+import time
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,9 +11,16 @@ load_dotenv()
 from telegram_bot import build_app
 from scheduler import schedule_loop
 
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_DIR / "agent.log", encoding="utf-8"),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -41,5 +51,27 @@ async def main():
             logger.info("봇 종료됨.")
 
 
+def run_with_recovery():
+    """크래시 시 최대 5회, 지수 백오프로 자동 재시작."""
+    retry_delay = 5
+    max_delay = 300
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            asyncio.run(main())
+            break
+        except (KeyboardInterrupt, SystemExit):
+            break
+        except Exception as e:
+            logger.exception(f"[시도 {attempt}] 봇 크래시: {e}")
+            if attempt > 20:
+                logger.error("20회 연속 실패 — 종료")
+                break
+            logger.info(f"{retry_delay}초 후 자동 재시작...")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_with_recovery()

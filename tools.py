@@ -4,6 +4,7 @@ import aiofiles
 import glob as glob_module
 from pathlib import Path
 from memory import memory_read, memory_write
+from web_search import web_search, fetch_url
 from mac_tools import (
     run_applescript,
     mac_notify,
@@ -190,6 +191,27 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {"app_name": {"type": "string"}},
             "required": ["app_name"]
+        }
+    },
+    {
+        "name": "web_search",
+        "description": "웹 검색 (DuckDuckGo). 최신 정보, 뉴스, 기술 문서 등",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "number", "description": "기본 5"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "fetch_url",
+        "description": "URL의 텍스트 내용 가져오기 (HTML 태그 제거됨)",
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"]
         }
     },
     {
@@ -382,6 +404,12 @@ async def execute_tool(name: str, inputs: dict) -> str:
 
         elif name == "applescript_run":
             return run_applescript(inputs["script"])
+
+        elif name == "web_search":
+            return web_search(inputs["query"], int(inputs.get("max_results", 5)))
+
+        elif name == "fetch_url":
+            return fetch_url(inputs["url"])
 
         elif name == "browser_open":
             return await _browser_open(inputs["url"], inputs.get("wait_for", ""))
