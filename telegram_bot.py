@@ -10,6 +10,7 @@ from telegram.constants import ParseMode
 from agent_engine import run_agent
 from orchestrator import run_orchestrated_task
 from daily_scout import run_daily_scout
+from scheduler import run_checkout
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,6 +99,26 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ 대기 중 (작업 없음)")
 
 
+async def cmd_checkout(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    await update.message.reply_text("🏠 퇴근 모드 시작! 잠시 후 보고서를 보내드릴게요.")
+
+    async def progress(msg: str):
+        try:
+            await update.message.reply_text(msg)
+        except Exception:
+            pass
+
+    async def _execute():
+        from telegram import Bot
+        bot: Bot = ctx.bot
+        from scheduler import run_checkout as _checkout
+        await _checkout(bot)
+
+    asyncio.create_task(_execute())
+
+
 async def cmd_screen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
@@ -163,5 +184,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("screen", cmd_screen))
+    app.add_handler(CommandHandler("퇴근", cmd_checkout))
+    app.add_handler(CommandHandler("checkout", cmd_checkout))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return app

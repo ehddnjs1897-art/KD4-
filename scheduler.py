@@ -11,10 +11,13 @@ logger = logging.getLogger(__name__)
 DAILY_HOUR = int(os.getenv("DAILY_REPORT_HOUR", "9"))
 ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID", "0"))
 
-# 자율 실행 시간대 (매일 이 시간에 스스로 할 일 찾아서 실행)
-AUTO_WORK_HOURS = [int(h) for h in os.getenv("AUTO_WORK_HOURS", "10,14").split(",")]
+# 일반 자율 실행 시간 (오전10, 오후12, 오후6)
+AUTO_WORK_HOURS = [int(h) for h in os.getenv("AUTO_WORK_HOURS", "10,12,18").split(",")]
 
-AUTO_TASK_PROMPT = """
+# 새벽 심층 작업 시간
+NIGHT_WORK_HOUR = int(os.getenv("NIGHT_WORK_HOUR", "2"))
+
+DAYTIME_PROMPT = """
 맥 전체를 스캔해서 가장 중요한 미완성 작업 하나를 찾아 직접 처리해줘.
 
 스캔 대상:
@@ -27,6 +30,46 @@ AUTO_TASK_PROMPT = """
 3. 처리 후 무엇을 했는지 한국어로 보고
 
 한 번에 한 가지만 처리하고 결과를 명확히 보고해줘.
+"""
+
+NIGHT_PROMPT = """
+지금은 새벽이라 사용자가 자고 있습니다. 방해 없이 깊이 있는 작업을 할 수 있는 최적의 시간입니다.
+
+다음을 순서대로 처리해줘:
+
+1. 전체 스캔
+   - ~/.claude/projects 에서 미완성 대화/작업 전부 찾기
+   - ~/Desktop, ~/Documents, ~/Downloads 최근 파일 분석
+   - 중요도 순으로 작업 목록 작성
+
+2. 심층 작업 (최대 3가지)
+   - 미완성 코드/문서 완성
+   - 정리가 필요한 파일 구조 개선
+   - README나 문서가 없는 프로젝트에 문서 추가
+
+3. 정리
+   - Downloads 폴더 오래된 파일 목록화
+   - 중복/불필요한 파일 목록화 (삭제는 사용자 확인 후)
+
+모든 작업 완료 후 아침에 사용자가 일어났을 때 볼 수 있게
+"새벽 작업 보고서" 형식으로 한국어로 정리해서 보고해줘.
+"""
+
+CHECKOUT_PROMPT = """
+사용자가 퇴근했습니다. 오늘 하루 작업을 정리하고 내일을 준비해줘.
+
+할 일:
+1. 오늘 수정된 파일들 정리 및 백업 확인
+2. ~/.claude/projects 에서 오늘 대화 요약
+3. 미완성으로 남은 작업 목록 파악
+4. 내일 해야 할 일 우선순위 정리
+5. 가능한 작업은 지금 바로 처리 (자동화 가능한 것들)
+
+퇴근 보고서 형식으로 정리해서 보내줘:
+- 오늘 완료한 것
+- 미완성 남은 것
+- 내일 우선순위
+- 지금 자동 처리한 것
 """
 
 
@@ -42,25 +85,39 @@ async def send_daily_report(bot: Bot):
         await _send(bot, "📋 오늘의 업무 보고서 작성 중...")
         report = await run_daily_scout()
         await _send(bot, report)
-        logger.info("Daily report sent.")
     except Exception as e:
         logger.error(f"Daily report failed: {e}")
 
 
-async def run_auto_work(bot: Bot):
+async def run_auto_work(bot: Bot, night_mode: bool = False):
     """스스로 할 일 찾아서 실행."""
+    prompt = NIGHT_PROMPT if night_mode else DAYTIME_PROMPT
+    label = "🌙 새벽 심층 작업" if night_mode else "🤖 자율 작업"
     try:
-        await _send(bot, "🤖 자율 작업 시작 — 할 일을 스스로 찾아 처리합니다...")
+        await _send(bot, f"{label} 시작...")
 
         async def progress(msg: str):
             await _send(bot, msg)
 
-        result = await run_agent(AUTO_TASK_PROMPT, progress_callback=progress)
-        await _send(bot, f"✅ 자율 작업 완료:\n{result}")
-        logger.info("Auto work completed.")
+        result = await run_agent(prompt, progress_callback=progress)
+        await _send(bot, f"✅ {label} 완료:\n{result}")
     except Exception as e:
         logger.error(f"Auto work failed: {e}")
-        await _send(bot, f"⚠️ 자율 작업 오류: {e}")
+        await _send(bot, f"⚠️ 작업 오류: {e}")
+
+
+async def run_checkout(bot: Bot):
+    """퇴근 모드 — 하루 정리 + 자율 작업."""
+    try:
+        await _send(bot, "🏠 퇴근 모드 시작! 오늘 하루 정리하고 할 수 있는 작업 처리할게요...")
+
+        async def progress(msg: str):
+            await _send(bot, msg)
+
+        result = await run_agent(CHECKOUT_PROMPT, progress_callback=progress)
+        await _send(bot, f"📊 퇴근 보고서:\n{result}")
+    except Exception as e:
+        await _send(bot, f"⚠️ 퇴근 모드 오류: {e}")
 
 
 async def schedule_loop(bot: Bot):
@@ -72,15 +129,20 @@ async def schedule_loop(bot: Bot):
         now = datetime.now()
         today = now.date()
 
-        # 매일 DAILY_HOUR시 — 업무 보고서
+        # 매일 오전 9시 — 업무 보고서
         if now.hour == DAILY_HOUR and today != last_report_date:
             await send_daily_report(bot)
             last_report_date = today
 
-        # AUTO_WORK_HOURS 시간대 — 자율 작업 실행
+        # 오전10, 오후12, 오후6 — 일반 자율 작업
         for hour in AUTO_WORK_HOURS:
             if now.hour == hour and last_auto_work.get(hour) != today:
-                await run_auto_work(bot)
+                await run_auto_work(bot, night_mode=False)
                 last_auto_work[hour] = today
+
+        # 새벽 2시 — 심층 자율 작업
+        if now.hour == NIGHT_WORK_HOUR and last_auto_work.get(NIGHT_WORK_HOUR) != today:
+            await run_auto_work(bot, night_mode=True)
+            last_auto_work[NIGHT_WORK_HOUR] = today
 
         await asyncio.sleep(60)
