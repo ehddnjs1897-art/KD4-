@@ -8,8 +8,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from telegram import BotCommand
 from telegram_bot import build_app
 from scheduler import schedule_loop
+
+BOT_COMMANDS = [
+    ("menu", "전체 메뉴"),
+    ("do", "단일 에이전트 실행"),
+    ("team", "멀티 에이전트 팀"),
+    ("report", "오늘 업무 보고"),
+    ("checkout", "퇴근 정리"),
+    ("task", "작업 큐에 추가"),
+    ("tasks", "대기 작업 보기"),
+    ("cancel", "작업 취소"),
+    ("cleardone", "완료 작업 정리"),
+    ("memory", "장기 기억 보기"),
+    ("remember", "사실 기억"),
+    ("forget", "메모리 초기화"),
+    ("screen", "화면 캡처"),
+    ("sysinfo", "시스템 정보"),
+    ("stop", "현재 작업 중단"),
+    ("status", "상태 확인"),
+]
 
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -36,6 +56,12 @@ async def main():
         logger.info("텔레그램 봇 시작됨. 폴링 중...")
 
         bot = app.bot
+        try:
+            await bot.set_my_commands([BotCommand(c, d) for c, d in BOT_COMMANDS])
+            logger.info("Telegram 명령어 목록 등록됨")
+        except Exception as e:
+            logger.warning(f"명령어 등록 실패: {e}")
+
         scheduler_task = asyncio.create_task(schedule_loop(bot))
 
         await app.updater.start_polling(drop_pending_updates=True)
