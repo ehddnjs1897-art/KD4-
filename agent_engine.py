@@ -43,17 +43,18 @@ def _strip_tool_calls(text: str) -> str:
 
 
 def _run_claude_cli(prompt: str, system: str) -> str:
-    """claude CLI를 subprocess로 호출."""
-    cmd = ["claude", "-p", prompt, "--system", system]
+    """claude CLI를 subprocess로 호출. system 프롬프트는 본문에 포함."""
+    full = f"{system}\n\n---\n\n{prompt}" if system else prompt
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120
+            ["claude", "-p", full],
+            capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0 and result.stderr:
             return f"[CLI 오류] {result.stderr[:500]}"
         return result.stdout.strip()
     except FileNotFoundError:
-        return "[오류] claude CLI가 설치되지 않았습니다. npm install -g @anthropic-ai/claude-code 로 설치하세요."
+        return "[오류] claude CLI가 설치되지 않았습니다."
     except subprocess.TimeoutExpired:
         return "[오류] 응답 시간 초과 (120초)"
 

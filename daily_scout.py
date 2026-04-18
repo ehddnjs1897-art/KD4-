@@ -140,8 +140,9 @@ async def run_daily_scout() -> str:
     prompt = f"다음 정보를 바탕으로 오늘의 업무 보고서를 작성해주세요:\n\n{context}"
 
     def _call():
+        full_prompt = f"{system}\n\n---\n\n{prompt}"
         result = subprocess.run(
-            ["claude", "-p", prompt, "--system", system],
+            ["claude", "-p", full_prompt],
             capture_output=True, text=True, timeout=120
         )
         return result.stdout.strip() or result.stderr.strip()
