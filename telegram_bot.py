@@ -11,6 +11,11 @@ from agent_engine import run_agent
 from orchestrator import run_orchestrated_task
 from daily_scout import run_daily_scout
 from scheduler import run_checkout
+from memory import memory_read, memory_write, _load as memory_load, _save as memory_save
+from task_queue import (
+    add_task, list_tasks, format_tasks_mobile,
+    complete_task, cancel_task, clear_done, next_task,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,19 +38,41 @@ async def _send_chunks(update: Update, text: str):
         await update.message.reply_text(text[i:i+4000])
 
 
+MENU_TEXT = (
+    "👋 맥 자율 에이전트\n\n"
+    "🎯 실행\n"
+    "/do <작업> — 단일 에이전트\n"
+    "/team <작업> — 멀티 에이전트 팀\n"
+    "/report — 오늘 업무 보고\n"
+    "/checkout — 퇴근 모드\n\n"
+    "📝 작업 큐\n"
+    "/task <내용> [priority] — 작업 추가 (urgent/high/normal/low)\n"
+    "/tasks — 대기 중 작업 목록\n"
+    "/cancel <id> — 작업 취소\n"
+    "/cleardone — 완료된 작업 삭제\n\n"
+    "🧠 메모리\n"
+    "/memory — 저장된 기억 보기\n"
+    "/remember <내용> — 사실 기억\n"
+    "/forget — 메모리 초기화\n\n"
+    "🛠 시스템\n"
+    "/screen — 화면 캡처\n"
+    "/sysinfo — 배터리/디스크/CPU\n"
+    "/stop — 현재 작업 중단\n"
+    "/status — 상태 확인\n"
+    "/menu — 이 메뉴 다시 보기"
+)
+
+
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
-    await update.message.reply_text(
-        "👋 안녕하세요! 맥 자율 에이전트입니다.\n\n"
-        "명령어:\n"
-        "/do <작업> — 단일 에이전트로 실행\n"
-        "/team <작업> — 멀티 에이전트 팀으로 실행\n"
-        "/report — 오늘의 업무 보고\n"
-        "/stop — 현재 작업 중단\n"
-        "/status — 현재 상태 확인\n\n"
-        "또는 그냥 메시지를 보내면 /do와 동일하게 실행됩니다."
-    )
+    await update.message.reply_text(MENU_TEXT)
+
+
+async def cmd_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    await update.message.reply_text(MENU_TEXT)
 
 
 async def cmd_do(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -119,6 +146,77 @@ async def cmd_checkout(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(_execute())
 
 
+async def cmd_memory(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    await _send_chunks(update, memory_read())
+
+
+async def cmd_remember(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    text = " ".join(ctx.args) if ctx.args else ""
+    if not text:
+        await update.message.reply_text("사용법: /remember <기억할 내용>")
+        return
+    result = memory_write("fact", text)
+    await update.message.reply_text(f"🧠 {result}")
+
+
+async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    memory_save({"facts": [], "tasks": [], "preferences": {}, "notes": []})
+    await update.message.reply_text("🧹 메모리 초기화 완료")
+
+
+async def cmd_task(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    if not ctx.args:
+        await update.message.reply_text("사용법: /task <내용> [urgent|high|normal|low]")
+        return
+    priority = "normal"
+    args = list(ctx.args)
+    if args[-1].lower() in {"urgent", "high", "normal", "low"}:
+        priority = args.pop().lower()
+    text = " ".join(args)
+    tid = add_task(text, priority)
+    await update.message.reply_text(f"📝 작업 추가됨 [{tid}] {priority}\n{text}")
+
+
+async def cmd_tasks(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    status = ctx.args[0] if ctx.args else "pending"
+    await _send_chunks(update, format_tasks_mobile(status))
+
+
+async def cmd_cancel_task(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    if not ctx.args:
+        await update.message.reply_text("사용법: /cancel <작업id>")
+        return
+    tid = ctx.args[0]
+    ok = cancel_task(tid)
+    await update.message.reply_text(f"🗑 취소 {'완료' if ok else '실패 (id 없음)'}: {tid}")
+
+
+async def cmd_cleardone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    clear_done()
+    await update.message.reply_text("✅ 완료된 작업 전부 정리됨")
+
+
+async def cmd_sysinfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    from mac_tools import system_info
+    await update.message.reply_text(system_info())
+
+
 async def cmd_screen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
@@ -178,6 +276,7 @@ def build_app() -> Application:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("menu", cmd_menu))
     app.add_handler(CommandHandler("do", cmd_do))
     app.add_handler(CommandHandler("team", cmd_team))
     app.add_handler(CommandHandler("report", cmd_report))
@@ -185,5 +284,13 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("screen", cmd_screen))
     app.add_handler(CommandHandler("checkout", cmd_checkout))
+    app.add_handler(CommandHandler("memory", cmd_memory))
+    app.add_handler(CommandHandler("remember", cmd_remember))
+    app.add_handler(CommandHandler("forget", cmd_forget))
+    app.add_handler(CommandHandler("task", cmd_task))
+    app.add_handler(CommandHandler("tasks", cmd_tasks))
+    app.add_handler(CommandHandler("cancel", cmd_cancel_task))
+    app.add_handler(CommandHandler("cleardone", cmd_cleardone))
+    app.add_handler(CommandHandler("sysinfo", cmd_sysinfo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return app
