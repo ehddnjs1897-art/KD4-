@@ -141,7 +141,7 @@ async def execute_tool(name: str, inputs: dict) -> str:
                 f"간결하고 명확한 조언을 한국어로 주세요. 마크다운 없이 핵심만."
             )
             result = subprocess.run(
-                ["claude", "-p", opus_prompt, "--model", "claude-opus-4-7"],
+                ["claude", "-p", opus_prompt, "--model", "claude-opus-4-7", "--dangerously-skip-permissions"],
                 capture_output=True, text=True, timeout=300
             )
             return f"[Opus 자문]\n{result.stdout.strip()}"

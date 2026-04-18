@@ -61,7 +61,7 @@ def _run_claude_cli(prompt: str, system: str) -> str:
     full = f"{system}\n\n---\n\n{prompt}{_FORMAT_RULE}" if system else f"{prompt}{_FORMAT_RULE}"
     try:
         result = subprocess.run(
-            ["claude", "-p", full, "--model", "claude-sonnet-4-6"],
+            ["claude", "-p", full, "--model", "claude-sonnet-4-6", "--dangerously-skip-permissions"],
             capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0 and result.stderr:
