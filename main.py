@@ -16,10 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 async def main():
-    required = ["TELEGRAM_BOT_TOKEN", "ANTHROPIC_API_KEY", "TELEGRAM_ALLOWED_USER_ID"]
-    missing = [k for k in required if not os.getenv(k)]
-    if missing:
-        raise EnvironmentError(f"필수 환경변수 없음: {', '.join(missing)}\n.env 파일을 확인하세요.")
+    if not os.getenv("TELEGRAM_BOT_TOKEN"):
+        raise EnvironmentError("TELEGRAM_BOT_TOKEN이 .env에 없습니다.")
 
     app = build_app()
 

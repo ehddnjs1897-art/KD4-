@@ -39,7 +39,7 @@ if ! command -v claude &>/dev/null; then
             exit 1
         fi
     fi
-    npm install -g @anthropic-ai/claude-code
+    sudo npm install -g @anthropic-ai/claude-code
     # npm 전역 설치 경로를 현재 세션 PATH에 추가
     export PATH="$(npm prefix -g)/bin:$PATH"
 fi
