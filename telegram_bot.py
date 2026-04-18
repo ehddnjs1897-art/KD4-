@@ -12,7 +12,10 @@ from daily_scout import run_daily_scout
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID", "0"))
+try:
+    ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID", "0"))
+except ValueError:
+    ALLOWED_USER_ID = 0
 
 _active_tasks: dict[int, asyncio.Task] = {}
 
