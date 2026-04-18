@@ -48,9 +48,17 @@ def _strip_tool_calls(text: str) -> str:
     return re.sub(r"<tool_call>.*?</tool_call>", "", text, flags=re.DOTALL).strip()
 
 
+_FORMAT_RULE = """
+
+[출력 형식 규칙 - 반드시 따를 것]
+- ## ** ` --- > 같은 마크다운 기호 절대 사용 금지
+- 짧고 간결하게, 이모지로 항목 구분
+- 누구나 읽기 쉬운 한국어로만 작성"""
+
+
 def _run_claude_cli(prompt: str, system: str) -> str:
     """claude CLI를 subprocess로 호출. system 프롬프트는 본문에 포함."""
-    full = f"{system}\n\n---\n\n{prompt}" if system else prompt
+    full = f"{system}\n\n---\n\n{prompt}{_FORMAT_RULE}" if system else f"{prompt}{_FORMAT_RULE}"
     try:
         result = subprocess.run(
             ["claude", "-p", full],
