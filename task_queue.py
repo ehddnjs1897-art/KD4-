@@ -25,7 +25,7 @@ def _save(data: list):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def add_task(text: str, priority: str = "normal") -> str:
+def add_task(text: str, priority: str = "normal", meta: Optional[dict] = None) -> str:
     priority = priority if priority in PRIORITY_ORDER else "normal"
     tasks = _load()
     task = {
@@ -36,10 +36,21 @@ def add_task(text: str, priority: str = "normal") -> str:
         "created": datetime.now().isoformat(timespec="seconds"),
         "completed": None,
         "result": None,
+        "meta": meta or {},
     }
     tasks.append(task)
     _save(tasks)
     return task["id"]
+
+
+def start_task(task_id: str) -> bool:
+    tasks = _load()
+    for t in tasks:
+        if t["id"] == task_id and t["status"] == "pending":
+            t["status"] = "in_progress"
+            _save(tasks)
+            return True
+    return False
 
 
 def list_tasks(status: str = "pending") -> list:
@@ -85,12 +96,18 @@ def clear_done():
 
 def format_tasks_mobile(status: str = "pending") -> str:
     tasks = list_tasks(status)
+    # Always prepend in_progress tasks when viewing pending
+    if status == "pending":
+        all_tasks = _load()
+        in_prog = [t for t in all_tasks if t["status"] == "in_progress"]
+        tasks = in_prog + tasks
     if not tasks:
         return "🗒 작업 없음"
     ICONS = {"urgent": "🔴", "high": "🟠", "normal": "🟡", "low": "🟢"}
+    STATUS_MARK = {"done": "✅", "in_progress": "⚙️", "pending": "⏳"}
     lines = []
     for t in tasks[:20]:
         icon = ICONS.get(t["priority"], "🟡")
-        mark = "✅" if t["status"] == "done" else "⏳"
+        mark = STATUS_MARK.get(t["status"], "⏳")
         lines.append(f"{icon}{mark} [{t['id']}] {t['text'][:60]}")
     return "\n".join(lines)

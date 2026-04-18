@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from telegram import BotCommand
-from telegram_bot import build_app
+from telegram_bot import build_app, queue_worker
 from scheduler import schedule_loop
 
 BOT_COMMANDS = [
@@ -63,6 +63,7 @@ async def main():
             logger.warning(f"명령어 등록 실패: {e}")
 
         scheduler_task = asyncio.create_task(schedule_loop(bot))
+        worker_task = asyncio.create_task(queue_worker(bot))
 
         await app.updater.start_polling(drop_pending_updates=True)
 
@@ -72,6 +73,7 @@ async def main():
             pass
         finally:
             scheduler_task.cancel()
+            worker_task.cancel()
             await app.updater.stop()
             await app.stop()
             logger.info("봇 종료됨.")

@@ -6,7 +6,7 @@ from pathlib import Path
 from telegram import Bot
 from daily_scout import run_daily_scout
 from agent_engine import run_agent
-from task_queue import next_task, complete_task, list_tasks
+from task_queue import next_task, complete_task, list_tasks, start_task
 from memory import memory_write
 
 logger = logging.getLogger(__name__)
@@ -121,6 +121,7 @@ async def process_task_queue(bot: Bot, max_tasks: int = 3) -> int:
         task = next_task()
         if not task:
             break
+        start_task(task["id"])  # Mark immediately — prevents queue_worker double-execution
         try:
             await _send(bot, f"📝 큐 작업 시작 [{task['id']}] {task['priority']}\n{task['text']}")
 
