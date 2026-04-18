@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
 from telegram import Bot
 from daily_scout import run_daily_scout
 from agent_engine import run_agent
@@ -53,6 +54,18 @@ NIGHT_PROMPT = """
 
 모든 작업 완료 후 아침에 사용자가 일어났을 때 볼 수 있게
 "새벽 작업 보고서" 형식으로 한국어로 정리해서 보고해줘.
+"""
+
+HEARTBEAT_FILE = os.path.expanduser("~/claude-agent/HEARTBEAT.md")
+
+HEARTBEAT_PROMPT = """HEARTBEAT.md 파일에 새 요청이 있습니다. 내용을 읽고 처리하세요.
+
+처리 후:
+1. 완료된 항목 앞에 ✅ 표시
+2. 처리 결과를 HEARTBEAT.md 하단에 추가
+3. 텔레그램으로 결과 보고
+
+파일 경로: ~/claude-agent/HEARTBEAT.md
 """
 
 CHECKOUT_PROMPT = """
@@ -120,10 +133,31 @@ async def run_checkout(bot: Bot):
         await _send(bot, f"⚠️ 퇴근 모드 오류: {e}")
 
 
+async def run_heartbeat(bot: Bot):
+    """HEARTBEAT.md 파일 확인 후 내용 있으면 처리."""
+    hb_path = Path(HEARTBEAT_FILE)
+    if not hb_path.exists():
+        return
+    content = hb_path.read_text(encoding="utf-8").strip()
+    if not content or content.startswith("# 처리 완료"):
+        return
+    try:
+        await _send(bot, "💓 Heartbeat — 새 요청 감지, 처리 시작...")
+
+        async def progress(msg: str):
+            await _send(bot, msg)
+
+        result = await run_agent(HEARTBEAT_PROMPT, progress_callback=progress)
+        await _send(bot, f"💓 Heartbeat 완료:\n{result}")
+    except Exception as e:
+        logger.error(f"Heartbeat failed: {e}")
+
+
 async def schedule_loop(bot: Bot):
     """매일 정해진 시간에 자동 실행."""
     last_report_date = None
     last_auto_work: dict[int, object] = {}
+    last_heartbeat_min = -1
 
     while True:
         now = datetime.now()
@@ -144,5 +178,11 @@ async def schedule_loop(bot: Bot):
         if now.hour == NIGHT_WORK_HOUR and last_auto_work.get(NIGHT_WORK_HOUR) != today:
             await run_auto_work(bot, night_mode=True)
             last_auto_work[NIGHT_WORK_HOUR] = today
+
+        # 30분마다 — HEARTBEAT.md 확인
+        current_slot = (now.hour * 60 + now.minute) // 30
+        if current_slot != last_heartbeat_min:
+            await run_heartbeat(bot)
+            last_heartbeat_min = current_slot
 
         await asyncio.sleep(60)

@@ -4,6 +4,7 @@ import json
 import asyncio
 import subprocess
 from tools import TOOL_DEFINITIONS, execute_tool
+from memory import get_memory_context
 
 MAX_TURNS = 20
 
@@ -78,7 +79,9 @@ async def run_agent(
     system: str = "",
     progress_callback=None
 ) -> str:
-    conversation_parts = [f"작업: {prompt}"]
+    mem_ctx = get_memory_context()
+    mem_prefix = f"[장기 메모리]\n{mem_ctx}\n\n" if mem_ctx else ""
+    conversation_parts = [f"{mem_prefix}작업: {prompt}"]
 
     for turn in range(MAX_TURNS):
         full_prompt = "\n\n".join(conversation_parts)

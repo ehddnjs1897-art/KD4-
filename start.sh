@@ -33,6 +33,12 @@ source .venv/bin/activate
 echo "📦 패키지 확인 중..."
 pip install -q -r requirements.txt
 
+# Playwright 브라우저 설치 (최초 1회)
+if ! python3 -c "from playwright.sync_api import sync_playwright; sync_playwright()" 2>/dev/null || [ ! -d "$HOME/.cache/ms-playwright" ]; then
+    echo "🌐 브라우저 설치 중 (최초 1회)..."
+    playwright install chromium --quiet 2>/dev/null || true
+fi
+
 echo "🚀 에이전트 서버 시작!"
 echo "   텔레그램에서 봇에게 /start 를 보내보세요."
 echo "   종료: Ctrl+C"
