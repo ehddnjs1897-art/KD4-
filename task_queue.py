@@ -1,8 +1,10 @@
+from __future__ import annotations
 import json
 import os
 import uuid
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 QUEUE_FILE = os.path.expanduser("~/.claude-agent/tasks.json")
 
@@ -50,7 +52,7 @@ def list_tasks(status: str = "pending") -> list:
     )
 
 
-def next_task() -> dict | None:
+def next_task() -> Optional[dict]:
     pending = list_tasks("pending")
     return pending[0] if pending else None
 
