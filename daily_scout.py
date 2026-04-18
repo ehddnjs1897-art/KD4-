@@ -143,7 +143,7 @@ async def run_daily_scout() -> str:
         full_prompt = f"{system}\n\n---\n\n{prompt}"
         result = subprocess.run(
             ["claude", "-p", full_prompt],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=600
         )
         return result.stdout.strip() or result.stderr.strip()
 

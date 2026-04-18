@@ -54,7 +54,7 @@ def _run_claude_cli(prompt: str, system: str) -> str:
     try:
         result = subprocess.run(
             ["claude", "-p", full],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0 and result.stderr:
             return f"[CLI 오류] {result.stderr[:500]}"
