@@ -1,11 +1,61 @@
 import os
+import re
+import json
 import asyncio
-from typing import AsyncIterator
-import anthropic
+import subprocess
 from tools import TOOL_DEFINITIONS, execute_tool
 
-MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-7")
-MAX_TURNS = 30
+MAX_TURNS = 20
+
+_TOOL_DOCS = "\n".join(
+    f"- {t['name']}: {t['description']}\n  params: {json.dumps(t['input_schema']['properties'])}"
+    for t in TOOL_DEFINITIONS
+)
+
+AGENT_SYSTEM = f"""당신은 맥에서 실행되는 자율 에이전트입니다.
+주어진 작업을 완료하기 위해 아래 도구들을 사용하세요.
+
+사용 가능한 도구:
+{_TOOL_DOCS}
+
+도구를 사용할 때는 반드시 아래 형식으로 응답하세요:
+<tool_call>
+{{"name": "도구이름", "input": {{...}}}}
+</tool_call>
+
+도구 결과를 보고 추가 작업이 필요하면 다시 tool_call을 사용하세요.
+모든 작업이 완료되면 tool_call 없이 한국어로 결과를 요약하세요."""
+
+
+def _parse_tool_calls(text: str) -> list[dict]:
+    pattern = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+    calls = []
+    for m in pattern.finditer(text):
+        try:
+            calls.append(json.loads(m.group(1)))
+        except json.JSONDecodeError:
+            pass
+    return calls
+
+
+def _strip_tool_calls(text: str) -> str:
+    return re.sub(r"<tool_call>.*?</tool_call>", "", text, flags=re.DOTALL).strip()
+
+
+def _run_claude_cli(prompt: str, system: str) -> str:
+    """claude CLI를 subprocess로 호출."""
+    cmd = ["claude", "-p", prompt, "--system", system, "--output-format", "text"]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0 and result.stderr:
+            return f"[CLI 오류] {result.stderr[:500]}"
+        return result.stdout.strip()
+    except FileNotFoundError:
+        return "[오류] claude CLI가 설치되지 않았습니다. npm install -g @anthropic-ai/claude-code 로 설치하세요."
+    except subprocess.TimeoutExpired:
+        return "[오류] 응답 시간 초과 (120초)"
 
 
 async def run_agent(
@@ -13,59 +63,36 @@ async def run_agent(
     system: str = "",
     progress_callback=None
 ) -> str:
-    """
-    Run a full autonomous agent loop until Claude decides to stop.
-    Yields progress updates via progress_callback(str).
-    Returns the final text response.
-    """
-    client = anthropic.AsyncAnthropic()
-    messages = [{"role": "user", "content": prompt}]
-
-    default_system = (
-        "You are an autonomous agent running on the user's Mac. "
-        "Use the provided tools to complete the task fully. "
-        "After finishing, summarize what you did in Korean."
-    )
+    conversation_parts = [f"작업: {prompt}"]
 
     for turn in range(MAX_TURNS):
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            system=system or default_system,
-            tools=TOOL_DEFINITIONS,
-            messages=messages,
+        full_prompt = "\n\n".join(conversation_parts)
+        sys_prompt = system or AGENT_SYSTEM
+
+        response = await asyncio.get_event_loop().run_in_executor(
+            None, _run_claude_cli, full_prompt, sys_prompt
         )
 
-        tool_calls = [b for b in response.content if b.type == "tool_use"]
-        text_blocks = [b.text for b in response.content if b.type == "text" and b.text]
+        tool_calls = _parse_tool_calls(response)
+        clean_text = _strip_tool_calls(response)
 
-        if progress_callback and text_blocks:
-            await progress_callback("\n".join(text_blocks))
-
-        if response.stop_reason == "end_turn":
-            return "\n".join(text_blocks) or "(작업 완료)"
+        if progress_callback and clean_text:
+            await progress_callback(clean_text)
 
         if not tool_calls:
-            return "\n".join(text_blocks) or "(응답 없음)"
+            return clean_text or "(작업 완료)"
 
-        messages.append({"role": "assistant", "content": response.content})
+        conversation_parts.append(f"[에이전트 응답]\n{response}")
 
         tool_results = []
         for call in tool_calls:
+            name = call.get("name", "")
+            inp = call.get("input", {})
             if progress_callback:
-                await progress_callback(f"🔧 {call.name}({_summarize(call.input)})")
-            result = await execute_tool(call.name, call.input)
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": call.id,
-                "content": result,
-            })
+                await progress_callback(f"🔧 {name}({str(inp)[:60]})")
+            result = await execute_tool(name, inp)
+            tool_results.append(f"[{name} 결과]\n{result}")
 
-        messages.append({"role": "user", "content": tool_results})
+        conversation_parts.append("\n".join(tool_results))
 
-    return "최대 실행 횟수 초과 — 작업이 너무 복잡합니다."
-
-
-def _summarize(d: dict) -> str:
-    s = str(d)
-    return s[:60] + "..." if len(s) > 60 else s
+    return "최대 실행 횟수 초과."

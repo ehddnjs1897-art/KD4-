@@ -1,5 +1,5 @@
 #!/bin/bash
-# 최소 입력 빠른 시작 — Anthropic API 키만 입력하면 됩니다.
+# 최소 입력 빠른 시작 — 텔레그램 메시지 한 번만 보내면 됩니다.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -17,33 +17,58 @@ echo ""
 
 # Python 확인
 if ! command -v python3 &>/dev/null; then
-    echo -e "${RED}❌ Python3 미설치. 먼저 실행: brew install python3${NC}"
-    exit 1
+    echo -e "${RED}❌ Python3 미설치.${NC}"
+    if command -v brew &>/dev/null; then
+        brew install python3
+    else
+        echo "먼저 실행: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        exit 1
+    fi
 fi
 
+# claude CLI 확인 및 설치
+echo "🤖 Claude CLI 확인 중..."
+if ! command -v claude &>/dev/null; then
+    echo -e "${YELLOW}Claude CLI가 없습니다. 설치 중...${NC}"
+    if ! command -v npm &>/dev/null; then
+        echo "Node.js 설치 중..."
+        if command -v brew &>/dev/null; then
+            brew install node
+        else
+            echo -e "${RED}❌ npm이 없습니다. https://nodejs.org 에서 Node.js를 설치하세요.${NC}"
+            exit 1
+        fi
+    fi
+    npm install -g @anthropic-ai/claude-code
+    echo -e "${GREEN}✅ Claude CLI 설치 완료${NC}"
+else
+    CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "설치됨")
+    echo -e "${GREEN}✅ Claude CLI: $CLAUDE_VERSION${NC}"
+fi
+
+# Claude 로그인 확인
+echo ""
+echo "🔐 Claude 로그인 상태 확인..."
+if ! claude -p "안녕" --output-format text &>/dev/null; then
+    echo -e "${YELLOW}Claude에 로그인이 필요합니다.${NC}"
+    echo "브라우저가 열립니다. Max 구독 계정으로 로그인하세요."
+    claude login
+fi
+echo -e "${GREEN}✅ Claude 로그인 확인${NC}"
+
 # 가상환경 + 패키지
+echo ""
+echo "📦 패키지 설치 중..."
 if [ ! -d ".venv" ]; then
-    echo "📦 가상환경 생성 중..."
     python3 -m venv .venv
 fi
 source .venv/bin/activate
-echo "📦 패키지 설치 중..."
 pip install -q -r requirements.txt
 echo -e "${GREEN}✅ 패키지 준비 완료${NC}"
-echo ""
-
-# Anthropic API 키만 입력받기
-echo -e "${YELLOW}▶ Anthropic API Key를 입력하세요${NC}"
-echo "  (https://console.anthropic.com → API Keys)"
-echo -n "  API Key: "
-read -r ANTHROPIC_KEY
-if [ -z "$ANTHROPIC_KEY" ]; then
-    echo -e "${RED}❌ API 키가 필요합니다.${NC}"; exit 1
-fi
 
 # 봇 자동 설정
 echo ""
-echo "🤖 봇 설정 중..."
+echo "🤖 텔레그램 봇 설정 중..."
 python3 setup_telegram.py "$BOT_TOKEN"
 
 # User ID 자동 캡처
@@ -60,16 +85,15 @@ if [ -z "$USER_ID" ] || [ "$USER_ID" = "0" ]; then
 fi
 echo -e "${GREEN}✅ User ID: $USER_ID${NC}"
 
-# .env 생성
+# .env 생성 (Anthropic API 키 불필요)
 cat > .env <<EOF
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
 TELEGRAM_ALLOWED_USER_ID=$USER_ID
-ANTHROPIC_API_KEY=$ANTHROPIC_KEY
 CLAUDE_MODEL=claude-opus-4-7
-WORKSPACE_DIR=~
+WORKSPACE_DIR=$HOME
 DAILY_REPORT_HOUR=9
 EOF
-echo -e "${GREEN}✅ .env 저장 완료${NC}"
+echo -e "${GREEN}✅ 설정 저장 완료${NC}"
 
 # 맥 자동시작 등록
 echo ""
@@ -78,13 +102,10 @@ bash setup_autostart.sh
 
 echo ""
 echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}${BOLD}   완료! 에이전트가 백그라운드에서 실행 중입니다.${NC}"
+echo -e "${GREEN}${BOLD}   완료! 에이전트 시작 중...${NC}"
 echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  텔레그램 @${CYAN}${BOT_USERNAME}${NC} 에서 /start 를 눌러 시작하세요!"
-echo ""
-echo "  로그 확인: tail -f $SCRIPT_DIR/logs/agent.log"
+echo -e "  텔레그램 @${CYAN}${BOT_USERNAME}${NC} 에서 /start 를 눌러보세요!"
 echo ""
 
-# 바로 실행
 python3 main.py

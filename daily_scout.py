@@ -2,12 +2,12 @@ import os
 import json
 import glob
 import time
+import asyncio
+import subprocess
 from pathlib import Path
-from datetime import datetime, timedelta
-import anthropic
+from datetime import datetime
 
 WORKSPACE = os.path.expanduser(os.getenv("WORKSPACE_DIR", "~"))
-MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-7")
 
 SCAN_DIRS = [
     "~/Desktop",
@@ -129,21 +129,21 @@ def _build_context() -> str:
 
 
 async def run_daily_scout() -> str:
-    """파일/대화 스캔 후 Claude가 오늘의 업무 보고서 작성."""
+    """파일/대화 스캔 후 claude CLI로 오늘의 업무 보고서 작성."""
     context = _build_context()
 
-    client = anthropic.AsyncAnthropic()
-    response = await client.messages.create(
-        model=MODEL,
-        max_tokens=1500,
-        system=(
-            "당신은 사용자의 업무를 파악하고 우선순위를 정리하는 비서입니다. "
-            "주어진 파일/대화 정보를 바탕으로 오늘 해야 할 일을 한국어로 보고하세요. "
-            "이모지를 사용해 가독성 높게 작성하고, 각 항목에 간단한 이유를 달아주세요."
-        ),
-        messages=[{
-            "role": "user",
-            "content": f"다음 정보를 바탕으로 오늘의 업무 보고서를 작성해주세요:\n\n{context}"
-        }],
+    system = (
+        "당신은 사용자의 업무를 파악하고 우선순위를 정리하는 비서입니다. "
+        "주어진 파일/대화 정보를 바탕으로 오늘 해야 할 일을 한국어로 보고하세요. "
+        "이모지를 사용해 가독성 높게 작성하고, 각 항목에 간단한 이유를 달아주세요."
     )
-    return response.content[0].text
+    prompt = f"다음 정보를 바탕으로 오늘의 업무 보고서를 작성해주세요:\n\n{context}"
+
+    def _call():
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--system", system, "--output-format", "text"],
+            capture_output=True, text=True, timeout=120
+        )
+        return result.stdout.strip() or result.stderr.strip()
+
+    return await asyncio.get_event_loop().run_in_executor(None, _call)
