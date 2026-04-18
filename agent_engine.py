@@ -44,7 +44,7 @@ def _strip_tool_calls(text: str) -> str:
 
 def _run_claude_cli(prompt: str, system: str) -> str:
     """claude CLI를 subprocess로 호출."""
-    cmd = ["claude", "-p", prompt, "--system", system, "--output-format", "text"]
+    cmd = ["claude", "-p", prompt, "--system", system]
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=120
