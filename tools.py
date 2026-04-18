@@ -4,6 +4,7 @@ import aiofiles
 import glob as glob_module
 from pathlib import Path
 from memory import memory_read, memory_write
+from claude_cli import CLAUDE_BIN, CLAUDE_ENV
 from web_search import web_search, fetch_url
 from mac_tools import (
     run_applescript,
@@ -375,8 +376,8 @@ async def execute_tool(name: str, inputs: dict) -> str:
                 f"간결하고 명확한 조언을 한국어로 주세요. 마크다운 없이 핵심만."
             )
             result = subprocess.run(
-                ["claude", "-p", opus_prompt, "--model", "claude-opus-4-7", "--dangerously-skip-permissions"],
-                capture_output=True, text=True, timeout=300
+                [CLAUDE_BIN, "-p", opus_prompt, "--model", "claude-opus-4-7", "--dangerously-skip-permissions"],
+                capture_output=True, text=True, timeout=300, env=CLAUDE_ENV
             )
             return f"[Opus 자문]\n{result.stdout.strip()}"
 
@@ -414,9 +415,9 @@ async def execute_tool(name: str, inputs: dict) -> str:
             )
             try:
                 result = subprocess.run(
-                    ["claude", "-p", vision_prompt, "--model", "claude-sonnet-4-6",
+                    [CLAUDE_BIN, "-p", vision_prompt, "--model", "claude-sonnet-4-6",
                      "--dangerously-skip-permissions", path],
-                    capture_output=True, text=True, timeout=180
+                    capture_output=True, text=True, timeout=180, env=CLAUDE_ENV
                 )
                 if result.returncode != 0:
                     return f"비전 분석 실패: {result.stderr[:300]}"

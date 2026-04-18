@@ -5,6 +5,7 @@ import asyncio
 import subprocess
 from tools import TOOL_DEFINITIONS, execute_tool
 from memory import get_memory_context
+from claude_cli import CLAUDE_BIN, CLAUDE_ENV
 
 MAX_TURNS = 20
 
@@ -62,14 +63,14 @@ def _run_claude_cli(prompt: str, system: str, model: str = "claude-sonnet-4-6") 
     full = f"{system}\n\n---\n\n{prompt}{_FORMAT_RULE}" if system else f"{prompt}{_FORMAT_RULE}"
     try:
         result = subprocess.run(
-            ["claude", "-p", full, "--model", model, "--dangerously-skip-permissions"],
-            capture_output=True, text=True, timeout=600
+            [CLAUDE_BIN, "-p", full, "--model", model, "--dangerously-skip-permissions"],
+            capture_output=True, text=True, timeout=600, env=CLAUDE_ENV
         )
         if result.returncode != 0 and result.stderr:
             return f"[CLI 오류] {result.stderr[:500]}"
         return result.stdout.strip()
     except FileNotFoundError:
-        return "[오류] claude CLI가 설치되지 않았습니다."
+        return f"[오류] claude CLI를 찾을 수 없음 (경로: {CLAUDE_BIN}). `which claude`로 확인 후 ~/.zshrc PATH 설정 필요."
     except subprocess.TimeoutExpired:
         return "[오류] 응답 시간 초과 (600초)"
 
