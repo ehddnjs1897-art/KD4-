@@ -63,6 +63,17 @@ TOOL_DEFINITIONS = [
             },
             "required": ["directory", "query"]
         }
+    },
+    {
+        "name": "ask_opus",
+        "description": "복잡한 판단이나 전략적 결정이 필요할 때 Opus 4.7에게 자문을 구합니다",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "Opus에게 물어볼 질문 또는 상황 설명"}
+            },
+            "required": ["question"]
+        }
     }
 ]
 
@@ -121,6 +132,19 @@ async def execute_tool(name: str, inputs: dict) -> str:
             cmd = f"grep -rn {include} --max-count=5 '{q}' '{d}' 2>/dev/null | head -50"
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
             return result.stdout or "No matches found."
+
+        elif name == "ask_opus":
+            question = inputs["question"]
+            opus_prompt = (
+                f"Sonnet 에이전트가 자문을 요청했습니다.\n\n"
+                f"상황/질문:\n{question}\n\n"
+                f"간결하고 명확한 조언을 한국어로 주세요. 마크다운 없이 핵심만."
+            )
+            result = subprocess.run(
+                ["claude", "-p", opus_prompt, "--model", "claude-opus-4-7"],
+                capture_output=True, text=True, timeout=300
+            )
+            return f"[Opus 자문]\n{result.stdout.strip()}"
 
         else:
             return f"Unknown tool: {name}"
