@@ -1,6 +1,8 @@
 import os
 import asyncio
 import logging
+import subprocess
+import tempfile
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
@@ -96,6 +98,21 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ 대기 중 (작업 없음)")
 
 
+async def cmd_screen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    await update.message.reply_text("📸 화면 캡처 중...")
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            path = f.name
+        subprocess.run(["screencapture", "-x", path], check=True, timeout=10)
+        with open(path, "rb") as img:
+            await update.message.reply_photo(img, caption="🖥 맥 현재 화면")
+        os.unlink(path)
+    except Exception as e:
+        await update.message.reply_text(f"❌ 화면 캡처 실패: {e}")
+
+
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
@@ -145,5 +162,6 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("report", cmd_report))
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("screen", cmd_screen))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return app
