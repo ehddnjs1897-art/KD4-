@@ -12,7 +12,7 @@ DAILY_HOUR = int(os.getenv("DAILY_REPORT_HOUR", "9"))
 ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID", "0"))
 
 # 일반 자율 실행 시간 (오전10, 오후12, 오후6)
-AUTO_WORK_HOURS = [int(h) for h in os.getenv("AUTO_WORK_HOURS", "10,12,18").split(",")]
+AUTO_WORK_HOURS = [int(h) for h in os.getenv("AUTO_WORK_HOURS", "8,10,12,14,16,18,20,22").split(",")]
 
 # 새벽 심층 작업 시간
 NIGHT_WORK_HOUR = int(os.getenv("NIGHT_WORK_HOUR", "2"))
