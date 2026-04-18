@@ -40,19 +40,28 @@ if ! command -v claude &>/dev/null; then
         fi
     fi
     npm install -g @anthropic-ai/claude-code
-    echo -e "${GREEN}✅ Claude CLI 설치 완료${NC}"
-else
-    CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "설치됨")
-    echo -e "${GREEN}✅ Claude CLI: $CLAUDE_VERSION${NC}"
+    # npm 전역 설치 경로를 현재 세션 PATH에 추가
+    export PATH="$(npm prefix -g)/bin:$PATH"
 fi
+
+if ! command -v claude &>/dev/null; then
+    echo -e "${RED}❌ Claude CLI 설치 실패. 수동으로 실행 후 재시도:${NC}"
+    echo "   npm install -g @anthropic-ai/claude-code"
+    exit 1
+fi
+echo -e "${GREEN}✅ Claude CLI: $(claude --version 2>/dev/null || echo '설치됨')${NC}"
 
 # Claude 로그인 확인
 echo ""
 echo "🔐 Claude 로그인 상태 확인..."
-if ! claude -p "안녕" --output-format text &>/dev/null; then
+if ! claude -p "hi" --output-format text >/dev/null 2>&1; then
     echo -e "${YELLOW}Claude에 로그인이 필요합니다.${NC}"
     echo "브라우저가 열립니다. Max 구독 계정으로 로그인하세요."
     claude login
+    if ! claude -p "hi" --output-format text >/dev/null 2>&1; then
+        echo -e "${RED}❌ 로그인 실패. 다시 시도하세요.${NC}"
+        exit 1
+    fi
 fi
 echo -e "${GREEN}✅ Claude 로그인 확인${NC}"
 
