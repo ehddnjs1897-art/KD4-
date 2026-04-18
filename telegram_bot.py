@@ -184,7 +184,6 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("screen", cmd_screen))
-    app.add_handler(CommandHandler("퇴근", cmd_checkout))
     app.add_handler(CommandHandler("checkout", cmd_checkout))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return app
