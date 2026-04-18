@@ -57,12 +57,12 @@ _FORMAT_RULE = """
 - 누구나 읽기 쉬운 한국어로만 작성"""
 
 
-def _run_claude_cli(prompt: str, system: str) -> str:
+def _run_claude_cli(prompt: str, system: str, model: str = "claude-sonnet-4-6") -> str:
     """claude CLI를 subprocess로 호출. system 프롬프트는 본문에 포함."""
     full = f"{system}\n\n---\n\n{prompt}{_FORMAT_RULE}" if system else f"{prompt}{_FORMAT_RULE}"
     try:
         result = subprocess.run(
-            ["claude", "-p", full, "--model", "claude-sonnet-4-6", "--dangerously-skip-permissions"],
+            ["claude", "-p", full, "--model", model, "--dangerously-skip-permissions"],
             capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0 and result.stderr:
@@ -71,13 +71,21 @@ def _run_claude_cli(prompt: str, system: str) -> str:
     except FileNotFoundError:
         return "[오류] claude CLI가 설치되지 않았습니다."
     except subprocess.TimeoutExpired:
-        return "[오류] 응답 시간 초과 (120초)"
+        return "[오류] 응답 시간 초과 (600초)"
 
 
-async def run_agent(
+def _is_failure(text: str) -> bool:
+    if not text or len(text.strip()) < 10:
+        return True
+    markers = ["[CLI 오류]", "[오류]", "최대 실행 횟수 초과"]
+    return any(m in text for m in markers)
+
+
+async def _run_agent_with_model(
     prompt: str,
-    system: str = "",
-    progress_callback=None
+    system: str,
+    model: str,
+    progress_callback
 ) -> str:
     mem_ctx = get_memory_context()
     mem_prefix = f"[장기 메모리]\n{mem_ctx}\n\n" if mem_ctx else ""
@@ -88,7 +96,7 @@ async def run_agent(
         sys_prompt = system or AGENT_SYSTEM
 
         response = await asyncio.get_event_loop().run_in_executor(
-            None, _run_claude_cli, full_prompt, sys_prompt
+            None, _run_claude_cli, full_prompt, sys_prompt, model
         )
 
         tool_calls = _parse_tool_calls(response)
@@ -114,3 +122,16 @@ async def run_agent(
         conversation_parts.append("\n".join(tool_results))
 
     return "최대 실행 횟수 초과."
+
+
+async def run_agent(
+    prompt: str,
+    system: str = "",
+    progress_callback=None
+) -> str:
+    result = await _run_agent_with_model(prompt, system, "claude-sonnet-4-6", progress_callback)
+    if _is_failure(result):
+        if progress_callback:
+            await progress_callback("⚙️ Sonnet 실패 — Opus 4.7로 재시도...")
+        result = await _run_agent_with_model(prompt, system, "claude-opus-4-7", progress_callback)
+    return result
