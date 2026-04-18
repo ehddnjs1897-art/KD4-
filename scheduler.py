@@ -12,7 +12,13 @@ from memory import memory_write
 logger = logging.getLogger(__name__)
 
 DAILY_HOUR = int(os.getenv("DAILY_REPORT_HOUR", "9"))
-ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID", "0"))
+
+def _parse_ids() -> list[int]:
+    raw = os.getenv("TELEGRAM_ALLOWED_USER_IDS") or os.getenv("TELEGRAM_ALLOWED_USER_ID", "")
+    return [int(p) for p in raw.split(",") if p.strip().isdigit()]
+
+ALLOWED_IDS = _parse_ids()
+ALLOWED_USER_ID = ALLOWED_IDS[0] if ALLOWED_IDS else 0  # 관리자 = 첫 번째
 
 # 일반 자율 실행 시간 (오전10, 오후12, 오후6)
 AUTO_WORK_HOURS = [int(h) for h in os.getenv("AUTO_WORK_HOURS", "8,10,12,14,16,18,20,22").split(",")]
@@ -88,11 +94,19 @@ CHECKOUT_PROMPT = """
 """
 
 
-async def _send(bot: Bot, text: str):
-    if not ALLOWED_USER_ID:
+async def _send(bot: Bot, text: str, admin_only: bool = False):
+    """관리자 또는 전체 허용 사용자에게 메시지 전송."""
+    targets = [ALLOWED_USER_ID] if admin_only else ALLOWED_IDS
+    if not targets:
         return
-    for i in range(0, len(text), 4000):
-        await bot.send_message(chat_id=ALLOWED_USER_ID, text=text[i:i+4000])
+    for uid in targets:
+        if not uid:
+            continue
+        try:
+            for i in range(0, len(text), 4000):
+                await bot.send_message(chat_id=uid, text=text[i:i+4000])
+        except Exception as e:
+            logger.warning(f"_send uid={uid} 실패: {e}")
 
 
 async def send_daily_report(bot: Bot):

@@ -22,10 +22,22 @@ from task_queue import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-try:
-    ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID", "0"))
-except ValueError:
-    ALLOWED_USER_ID = 0
+def _parse_allowed_ids() -> list[int]:
+    # TELEGRAM_ALLOWED_USER_IDS=123,456  (신규, 첫 번째 = 관리자)
+    # TELEGRAM_ALLOWED_USER_ID=123       (하위 호환)
+    raw = os.getenv("TELEGRAM_ALLOWED_USER_IDS") or os.getenv("TELEGRAM_ALLOWED_USER_ID", "")
+    ids = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.append(int(part))
+    return ids
+
+ALLOWED_IDS: list[int] = _parse_allowed_ids()
+ADMIN_ID: int = ALLOWED_IDS[0] if ALLOWED_IDS else 0
+
+# 직원이 사용할 수 없는 관리자 전용 명령
+ADMIN_ONLY_CMDS = {"stop", "forget", "checkout", "screen", "sysinfo"}
 
 # Global state for queue worker
 _default_chat_id: int = 0
@@ -34,7 +46,17 @@ _current_execution: Optional[asyncio.Task] = None
 
 
 def _is_allowed(update: Update) -> bool:
-    return ALLOWED_USER_ID == 0 or update.effective_user.id == ALLOWED_USER_ID
+    if not ALLOWED_IDS:
+        return True
+    return update.effective_user.id in ALLOWED_IDS
+
+
+def _is_admin(update: Update) -> bool:
+    return ADMIN_ID == 0 or update.effective_user.id == ADMIN_ID
+
+
+async def _deny_admin(update: Update):
+    await update.message.reply_text("🔒 이 명령은 관리자만 사용할 수 있습니다.")
 
 
 def _track_chat_id(update: Update):
@@ -131,6 +153,9 @@ async def cmd_report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
+    if not _is_admin(update):
+        await _deny_admin(update)
+        return
     global _current_execution
     if _current_execution and not _current_execution.done():
         _current_execution.cancel()
@@ -156,6 +181,9 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_checkout(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
+        return
+    if not _is_admin(update):
+        await _deny_admin(update)
         return
     _track_chat_id(update)
     await update.message.reply_text("🏠 퇴근 모드 시작! 잠시 후 보고서를 보내드릴게요.")
@@ -188,6 +216,9 @@ async def cmd_remember(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
+        return
+    if not _is_admin(update):
+        await _deny_admin(update)
         return
     memory_save({"facts": [], "tasks": [], "preferences": {}, "notes": []})
     await update.message.reply_text("🧹 메모리 초기화 완료")
@@ -243,12 +274,18 @@ async def cmd_cleardone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_sysinfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
+    if not _is_admin(update):
+        await _deny_admin(update)
+        return
     from mac_tools import system_info
     await update.message.reply_text(system_info())
 
 
 async def cmd_screen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
+        return
+    if not _is_admin(update):
+        await _deny_admin(update)
         return
     await update.message.reply_text("📸 화면 캡처 중...")
     try:
