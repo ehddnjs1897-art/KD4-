@@ -4,6 +4,18 @@ import aiofiles
 import glob as glob_module
 from pathlib import Path
 from memory import memory_read, memory_write
+from mac_tools import (
+    run_applescript,
+    mac_notify,
+    mac_say,
+    mac_clipboard_read,
+    mac_clipboard_write,
+    mac_screenshot,
+    system_info,
+    mac_mail_unread,
+    mac_calendar_today,
+    mac_open_app,
+)
 
 TOOL_DEFINITIONS = [
     {
@@ -107,6 +119,86 @@ TOOL_DEFINITIONS = [
                 "wait_for": {"type": "string", "description": "기다릴 CSS 셀렉터 (optional)"}
             },
             "required": ["url"]
+        }
+    },
+    {
+        "name": "mac_notify",
+        "description": "맥 데스크톱 알림 표시",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "message": {"type": "string"}
+            },
+            "required": ["title", "message"]
+        }
+    },
+    {
+        "name": "mac_say",
+        "description": "맥 내장 TTS로 텍스트 음성 출력 (한국어 음성: Yuna)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "voice": {"type": "string", "description": "기본 Yuna (한국어)"}
+            },
+            "required": ["text"]
+        }
+    },
+    {
+        "name": "mac_clipboard_read",
+        "description": "맥 클립보드 내용 읽기 (pbpaste)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "mac_clipboard_write",
+        "description": "맥 클립보드에 텍스트 복사 (pbcopy)",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"]
+        }
+    },
+    {
+        "name": "mac_screenshot",
+        "description": "맥 화면 전체 캡처 후 경로 반환",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "저장 경로 (optional)"}},
+            "required": []
+        }
+    },
+    {
+        "name": "system_info",
+        "description": "맥 시스템 정보: 배터리, 디스크, 메모리, CPU 부하, 업타임",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "mac_mail_unread",
+        "description": "맥 Mail 앱의 받은 편지함 미확인 메일 개수와 최근 5개 미확인 제목",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "mac_calendar_today",
+        "description": "맥 Calendar 앱에서 오늘 일정 가져오기",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "mac_open_app",
+        "description": "맥 애플리케이션 열기 (예: 'Safari', 'Calendar', 'Mail')",
+        "input_schema": {
+            "type": "object",
+            "properties": {"app_name": {"type": "string"}},
+            "required": ["app_name"]
+        }
+    },
+    {
+        "name": "applescript_run",
+        "description": "임의 AppleScript 실행 — Mac 앱 전부 제어 가능 (Messages, Notes, Reminders, Safari 등)",
+        "input_schema": {
+            "type": "object",
+            "properties": {"script": {"type": "string"}},
+            "required": ["script"]
         }
     },
     {
@@ -260,6 +352,36 @@ async def execute_tool(name: str, inputs: dict) -> str:
 
         elif name == "memory_read":
             return memory_read()
+
+        elif name == "mac_notify":
+            return mac_notify(inputs["title"], inputs["message"])
+
+        elif name == "mac_say":
+            return mac_say(inputs["text"], inputs.get("voice", "Yuna"))
+
+        elif name == "mac_clipboard_read":
+            return mac_clipboard_read()
+
+        elif name == "mac_clipboard_write":
+            return mac_clipboard_write(inputs["text"])
+
+        elif name == "mac_screenshot":
+            return mac_screenshot(inputs.get("path", ""))
+
+        elif name == "system_info":
+            return system_info()
+
+        elif name == "mac_mail_unread":
+            return mac_mail_unread()
+
+        elif name == "mac_calendar_today":
+            return mac_calendar_today()
+
+        elif name == "mac_open_app":
+            return mac_open_app(inputs["app_name"])
+
+        elif name == "applescript_run":
+            return run_applescript(inputs["script"])
 
         elif name == "browser_open":
             return await _browser_open(inputs["url"], inputs.get("wait_for", ""))
