@@ -223,9 +223,12 @@ async def run_heartbeat(bot: Bot):
 
 async def schedule_loop(bot: Bot):
     """매일 정해진 시간에 자동 실행."""
+    from sync_engine import sync_all
+
     last_report_date = None
     last_auto_work: dict[int, object] = {}
     last_heartbeat_min = -1
+    last_sync_hour = -1
 
     while True:
         now = datetime.now()
@@ -246,6 +249,16 @@ async def schedule_loop(bot: Bot):
         if now.hour == NIGHT_WORK_HOUR and last_auto_work.get(NIGHT_WORK_HOUR) != today:
             await run_auto_work(bot, night_mode=True)
             last_auto_work[NIGHT_WORK_HOUR] = today
+
+        # 6시간마다 — 전체 데이터 동기화 (조용히, 관리자에게만 알림 없이)
+        sync_slot = now.hour // 6
+        if sync_slot != last_sync_hour:
+            try:
+                await sync_all()
+                logger.info("자동 동기화 완료")
+            except Exception as e:
+                logger.warning(f"자동 동기화 실패: {e}")
+            last_sync_hour = sync_slot
 
         # 30분마다 — HEARTBEAT.md 확인
         current_slot = (now.hour * 60 + now.minute) // 30

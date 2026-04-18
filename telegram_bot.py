@@ -14,6 +14,7 @@ from orchestrator import run_orchestrated_task
 from daily_scout import run_daily_scout
 from scheduler import run_checkout
 from memory import memory_read, memory_write, _load as memory_load, _save as memory_save
+from sync_engine import sync_all, log_telegram_message
 from task_queue import (
     add_task, list_tasks, format_tasks_mobile,
     complete_task, cancel_task, clear_done, next_task, start_task,
@@ -103,6 +104,7 @@ MENU_TEXT = (
     "/sysinfo — 배터리/디스크/CPU\n"
     "/stop — 현재 작업 중단\n"
     "/status — 상태 확인\n"
+    "/sync — 전체 데이터 동기화\n"
     "/menu — 이 메뉴 다시 보기"
 )
 
@@ -128,6 +130,7 @@ async def cmd_do(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not task_text:
         await update.message.reply_text("사용법: /do <작업 내용>")
         return
+    log_telegram_message(update.effective_user.id, f"/do {task_text}")
     await _enqueue_task(update, task_text, use_team=False)
 
 
@@ -138,6 +141,7 @@ async def cmd_team(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not task_text:
         await update.message.reply_text("사용법: /team <작업 내용>")
         return
+    log_telegram_message(update.effective_user.id, f"/team {task_text}")
     await _enqueue_task(update, task_text, use_team=True)
 
 
@@ -299,9 +303,26 @@ async def cmd_screen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ 화면 캡처 실패: {e}")
 
 
+async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    _track_chat_id(update)
+    await update.message.reply_text("🔄 전체 데이터 동기화 시작...\nClaude 대화 / Telegram / 작업기록 / Notion")
+
+    async def progress(msg: str):
+        try:
+            await update.message.reply_text(msg)
+        except Exception:
+            pass
+
+    asyncio.create_task(sync_all(progress_callback=progress))
+
+
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
+    # 모든 메시지 로컬 기록
+    log_telegram_message(update.effective_user.id, update.message.text)
     await _enqueue_task(update, update.message.text, use_team=False)
 
 
@@ -430,5 +451,6 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("cancel", cmd_cancel_task))
     app.add_handler(CommandHandler("cleardone", cmd_cleardone))
     app.add_handler(CommandHandler("sysinfo", cmd_sysinfo))
+    app.add_handler(CommandHandler("sync", cmd_sync))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return app

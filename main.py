@@ -11,6 +11,7 @@ load_dotenv()
 from telegram import BotCommand
 from telegram_bot import build_app, queue_worker
 from scheduler import schedule_loop
+from sync_engine import sync_all
 
 BOT_COMMANDS = [
     ("menu", "전체 메뉴"),
@@ -29,6 +30,7 @@ BOT_COMMANDS = [
     ("sysinfo", "시스템 정보"),
     ("stop", "현재 작업 중단"),
     ("status", "상태 확인"),
+    ("sync", "전체 데이터 동기화"),
 ]
 
 LOG_DIR = Path(__file__).parent / "logs"
@@ -61,6 +63,9 @@ async def main():
             logger.info("Telegram 명령어 목록 등록됨")
         except Exception as e:
             logger.warning(f"명령어 등록 실패: {e}")
+
+        # 시작 시 백그라운드 데이터 동기화
+        asyncio.create_task(sync_all())
 
         scheduler_task = asyncio.create_task(schedule_loop(bot))
         worker_task = asyncio.create_task(queue_worker(bot))
