@@ -7,7 +7,7 @@ from tools import TOOL_DEFINITIONS, execute_tool
 from memory import get_memory_context
 from claude_cli import CLAUDE_BIN, CLAUDE_ENV
 
-MAX_TURNS = 20
+MAX_TURNS = 15
 
 _TOOL_DOCS = "\n".join(
     f"- {t['name']}: {t['description']}\n  params: {json.dumps(t['input_schema']['properties'])}"
@@ -36,18 +36,41 @@ AGENT_SYSTEM = f"""당신은 맥에서 실행되는 자율 에이전트입니다
 
 
 def _parse_tool_calls(text: str) -> list[dict]:
-    pattern = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+    # Use non-backtracking split approach to avoid ReDoS on large inputs
     calls = []
-    for m in pattern.finditer(text):
+    start = 0
+    open_tag = "<tool_call>"
+    close_tag = "</tool_call>"
+    while True:
+        s = text.find(open_tag, start)
+        if s == -1:
+            break
+        e = text.find(close_tag, s + len(open_tag))
+        if e == -1:
+            break
+        body = text[s + len(open_tag):e].strip()
         try:
-            calls.append(json.loads(m.group(1)))
+            calls.append(json.loads(body))
         except json.JSONDecodeError:
             pass
+        start = e + len(close_tag)
     return calls
 
 
 def _strip_tool_calls(text: str) -> str:
-    return re.sub(r"<tool_call>.*?</tool_call>", "", text, flags=re.DOTALL).strip()
+    parts = []
+    start = 0
+    open_tag = "<tool_call>"
+    close_tag = "</tool_call>"
+    while True:
+        s = text.find(open_tag, start)
+        if s == -1:
+            parts.append(text[start:])
+            break
+        parts.append(text[start:s])
+        e = text.find(close_tag, s)
+        start = e + len(close_tag) if e != -1 else len(text)
+    return "".join(parts).strip()
 
 
 _FORMAT_RULE = """

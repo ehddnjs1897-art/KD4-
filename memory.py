@@ -1,5 +1,6 @@
 import json
 import os
+import hashlib
 from pathlib import Path
 from datetime import datetime
 
@@ -20,6 +21,10 @@ def _save(data: dict):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _fact_key(text: str) -> str:
+    return hashlib.md5(text[:120].strip().encode()).hexdigest()[:12]
+
+
 def memory_write(category: str, value: str) -> str:
     mem = _load()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -33,6 +38,11 @@ def memory_write(category: str, value: str) -> str:
         mem["notes"].append({"text": value, "date": now})
         mem["notes"] = mem["notes"][-100:]
     else:
+        # Deduplicate facts: skip if near-identical text already exists
+        new_key = _fact_key(value)
+        existing_keys = {_fact_key(f["text"]) for f in mem["facts"]}
+        if new_key in existing_keys:
+            return f"메모리 이미 존재 [{category}]: {value[:80]}"
         mem["facts"].append({"text": value, "date": now})
         mem["facts"] = mem["facts"][-200:]
     _save(mem)
@@ -67,8 +77,10 @@ def get_memory_context() -> str:
     mem = _load()
     parts = []
     if mem["facts"]:
-        facts = [f["text"] for f in mem["facts"][-15:]]
-        parts.append("기억: " + " / ".join(facts))
+        # Most recent facts first, skip sync tags for agent context
+        facts = [f["text"] for f in reversed(mem["facts"]) if "[동기화:" not in f["text"]][:12]
+        if facts:
+            parts.append("기억: " + " / ".join(facts))
     if mem["preferences"]:
         prefs = [f"{k}={v}" for k, v in mem["preferences"].items()]
         parts.append("설정: " + ", ".join(prefs))

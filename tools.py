@@ -206,6 +206,30 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "git_status",
+        "description": "Git 저장소 상태 확인 (변경/추가/삭제된 파일 목록, 브랜치, 최근 커밋)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "저장소 경로 (기본 현재 디렉토리)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "git_diff",
+        "description": "Git 변경 내용 확인 (staged 또는 unstaged diff)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "저장소 경로"},
+                "staged": {"type": "boolean", "description": "true=staged diff, false=unstaged diff (기본 false)"},
+                "file": {"type": "string", "description": "특정 파일만 (optional)"}
+            },
+            "required": []
+        }
+    },
+    {
         "name": "web_search",
         "description": "웹 검색 (DuckDuckGo). 최신 정보, 뉴스, 기술 문서 등",
         "input_schema": {
@@ -371,6 +395,33 @@ async def execute_tool(name: str, inputs: dict) -> str:
             result = subprocess.run(args, capture_output=True, text=True, timeout=30)
             lines = result.stdout.strip().splitlines()[:50]
             return "\n".join(lines) if lines else "No matches found."
+
+        elif name == "git_status":
+            repo = _expand(inputs.get("path", "."))
+            r = subprocess.run(
+                ["git", "-C", repo, "status", "--short", "--branch"],
+                capture_output=True, text=True, timeout=15
+            )
+            log = subprocess.run(
+                ["git", "-C", repo, "log", "--oneline", "-5"],
+                capture_output=True, text=True, timeout=15
+            )
+            out = r.stdout.strip() or "(변경 없음)"
+            commits = log.stdout.strip()
+            return f"📁 Git 상태:\n{out}\n\n최근 커밋:\n{commits}" if commits else f"📁 Git 상태:\n{out}"
+
+        elif name == "git_diff":
+            repo = _expand(inputs.get("path", "."))
+            staged = inputs.get("staged", False)
+            file_arg = inputs.get("file", "")
+            args = ["git", "-C", repo, "diff"]
+            if staged:
+                args.append("--staged")
+            if file_arg:
+                args.append(_expand(file_arg))
+            r = subprocess.run(args, capture_output=True, text=True, timeout=15)
+            diff = r.stdout.strip()
+            return diff[:4000] if diff else "(변경 내용 없음)"
 
         elif name == "ask_opus":
             question = inputs["question"]

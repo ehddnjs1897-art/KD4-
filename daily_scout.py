@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import glob
 import time
@@ -57,6 +58,13 @@ def _scan_recent_files() -> list[dict]:
     return found
 
 
+_INCOMPLETE_RE = re.compile(
+    r"나중에|나중을|다음에|다음\s*주|내일|추후|미완성|미완료|완료\s*안|TODO|todo|FIXME|fixme|"
+    r"pending|incomplete|⚠️|아직|못\s*했|해야\s*함|해야\s*해|하면\s*될|작업\s*중|진행\s*중",
+    re.IGNORECASE,
+)
+
+
 def _scan_claude_conversations() -> list[str]:
     """Claude 대화 기록에서 미완성 항목 탐색."""
     snippets = []
@@ -68,12 +76,15 @@ def _scan_claude_conversations() -> list[str]:
     files = glob.glob(pattern, recursive=True)
     files.sort(key=os.path.getmtime, reverse=True)
 
-    keywords = ["나중에", "TODO", "todo", "해야", "미완성", "다음에", "나중", "추후", "pending"]
-
-    for fpath in files[:20]:
+    for fpath in files[:30]:
         try:
+            fsize = os.path.getsize(fpath)
             with open(fpath, "r", encoding="utf-8", errors="replace") as f:
-                lines = f.readlines()[-100:]
+                # For large files, only read the last portion
+                if fsize > 500_000:
+                    f.seek(max(0, fsize - 200_000))
+                    f.readline()  # skip partial line
+                lines = f.readlines()[-120:]
             for line in lines:
                 try:
                     obj = json.loads(line)
@@ -84,17 +95,24 @@ def _scan_claude_conversations() -> list[str]:
                         for block in obj["content"]:
                             if isinstance(block, dict) and block.get("type") == "text":
                                 text += block.get("text", "")
-                    for kw in keywords:
-                        if kw in text:
-                            snippet = text[:200].replace("\n", " ")
-                            snippets.append(snippet)
-                            break
+                    if text and _INCOMPLETE_RE.search(text):
+                        snippet = text[:200].replace("\n", " ")
+                        snippets.append(snippet)
                 except (json.JSONDecodeError, KeyError):
                     continue
         except OSError:
             continue
 
-    return snippets[:10]
+    # Deduplicate similar snippets
+    seen = set()
+    unique = []
+    for s in snippets:
+        key = s[:80]
+        if key not in seen:
+            seen.add(key)
+            unique.append(s)
+
+    return unique[:12]
 
 
 def _build_context() -> str:

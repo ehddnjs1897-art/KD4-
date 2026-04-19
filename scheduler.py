@@ -26,17 +26,22 @@ AUTO_WORK_HOURS = [int(h) for h in os.getenv("AUTO_WORK_HOURS", "8,10,12,14,16,1
 # 새벽 심층 작업 시간
 NIGHT_WORK_HOUR = int(os.getenv("NIGHT_WORK_HOUR", "2"))
 
-DAYTIME_PROMPT = """
+def _daytime_prompt() -> str:
+    from memory import get_memory_context
+    mem = get_memory_context()
+    mem_section = f"\n장기 메모리 (참고):\n{mem}\n" if mem else ""
+    return f"""
 맥 전체를 스캔해서 가장 중요한 미완성 작업 하나를 찾아 직접 처리해줘.
-
+{mem_section}
 스캔 대상:
 - ~/Desktop, ~/Documents, ~/Downloads
 - ~/.claude/projects (Claude 대화 기록)
 
 처리 기준:
-1. 오늘 수정됐거나 최근 대화에서 언급된 작업 우선
-2. 파일이 있으면 직접 수정/완성
-3. 처리 후 무엇을 했는지 한국어로 보고
+1. 메모리에 기록된 미완료 작업 최우선
+2. 오늘 수정됐거나 최근 대화에서 언급된 작업 우선
+3. 파일이 있으면 직접 수정/완성
+4. 처리 후 무엇을 했는지 한국어로 보고
 
 한 번에 한 가지만 처리하고 결과를 명확히 보고해줘.
 """
@@ -169,11 +174,13 @@ async def process_task_queue(bot: Bot, max_tasks: int = 3) -> int:
 async def run_auto_work(bot: Bot, night_mode: bool = False):
     """스스로 할 일 찾아서 실행. 큐 우선 소화 → 자율 탐색."""
     try:
-        queued = await process_task_queue(bot, max_tasks=3 if not night_mode else 10)
-        if queued > 0 and not night_mode:
+        max_q = 10 if night_mode else 3
+        queued = await process_task_queue(bot, max_tasks=max_q)
+        # Only skip autonomous work if we hit the full quota (queue was busy)
+        if queued >= max_q and not night_mode:
             return
 
-        prompt = NIGHT_PROMPT if night_mode else DAYTIME_PROMPT
+        prompt = NIGHT_PROMPT if night_mode else _daytime_prompt()
         label = "🌙 새벽 심층 작업" if night_mode else "🤖 자율 작업"
         await _send(bot, f"{label} 시작...")
 

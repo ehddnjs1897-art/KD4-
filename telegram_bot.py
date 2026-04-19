@@ -307,11 +307,36 @@ async def cmd_cancel_task(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
     if not ctx.args:
-        await update.message.reply_text("사용법: /cancel <작업id>")
+        await update.message.reply_text("사용법: /cancel <작업id|all>")
         return
-    tid = ctx.args[0]
-    ok = cancel_task(tid)
-    await update.message.reply_text(f"🗑 취소 {'완료' if ok else '실패 (id 없음)'}: {tid}")
+    arg = ctx.args[0].lower()
+    if arg == "all":
+        from task_queue import _load as tq_load, _save as tq_save
+        tasks = tq_load()
+        removed = [t for t in tasks if t["status"] == "pending"]
+        tq_save([t for t in tasks if t["status"] != "pending"])
+        await update.message.reply_text(f"🗑 대기 중 작업 {len(removed)}개 전부 취소됨")
+        return
+    ok = cancel_task(arg)
+    await update.message.reply_text(f"🗑 취소 {'완료' if ok else '실패 (id 없음)'}: {arg}")
+
+
+async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_allowed(update):
+        return
+    from task_queue import _load as tq_load
+    tasks = tq_load()
+    done = [t for t in tasks if t["status"] == "done"]
+    done.sort(key=lambda t: t.get("completed") or "", reverse=True)
+    if not done:
+        await update.message.reply_text("📭 완료된 작업 기록 없음")
+        return
+    lines = []
+    for t in done[:15]:
+        ts = (t.get("completed") or "")[:16].replace("T", " ")
+        mode = "🤝" if t.get("meta", {}).get("use_team") else "🤖"
+        lines.append(f"{mode} [{t['id']}] {ts}\n  {t['text'][:60]}")
+    await _send_chunks(update, "📜 완료 작업 기록 (최근 15개)\n\n" + "\n".join(lines))
 
 
 async def cmd_cleardone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -403,7 +428,7 @@ async def queue_worker(bot):
         try:
             task = next_task()
             if not task:
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
                 continue
 
             tid = task["id"]
@@ -496,6 +521,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("task", cmd_task))
     app.add_handler(CommandHandler("tasks", cmd_tasks))
     app.add_handler(CommandHandler("cancel", cmd_cancel_task))
+    app.add_handler(CommandHandler("history", cmd_history))
     app.add_handler(CommandHandler("cleardone", cmd_cleardone))
     app.add_handler(CommandHandler("sysinfo", cmd_sysinfo))
     app.add_handler(CommandHandler("sync", cmd_sync))
