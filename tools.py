@@ -360,13 +360,17 @@ async def execute_tool(name: str, inputs: dict) -> str:
             return "\n".join(lines)
 
         elif name == "search_files":
+            import shlex
             d = _expand(inputs["directory"])
             q = inputs["query"]
             pat = inputs.get("file_pattern", "")
-            include = f"--include='{pat}'" if pat else ""
-            cmd = f"grep -rn {include} --max-count=5 '{q}' '{d}' 2>/dev/null | head -50"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-            return result.stdout or "No matches found."
+            args = ["grep", "-rn", "--max-count=5"]
+            if pat:
+                args += ["--include", pat]
+            args += [q, d]
+            result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+            lines = result.stdout.strip().splitlines()[:50]
+            return "\n".join(lines) if lines else "No matches found."
 
         elif name == "ask_opus":
             question = inputs["question"]

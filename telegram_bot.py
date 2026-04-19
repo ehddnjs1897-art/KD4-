@@ -137,12 +137,23 @@ async def cmd_do(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_team(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
-    task_text = " ".join(ctx.args) if ctx.args else ""
-    if not task_text:
-        await update.message.reply_text("사용법: /team <작업 내용>")
+    raw = " ".join(ctx.args) if ctx.args else ""
+    if not raw:
+        await update.message.reply_text("사용법: /team <작업 내용>\n또는: /team 프로젝트명: 작업 내용")
         return
-    log_telegram_message(update.effective_user.id, f"/team {task_text}")
-    await _enqueue_task(update, task_text, use_team=True)
+    # Parse optional "프로젝트명: 작업내용" syntax
+    project_name = ""
+    task_text = raw
+    if ":" in raw:
+        before, _, after = raw.partition(":")
+        before = before.strip()
+        after = after.strip()
+        # Only treat as project prefix if the part before colon is short (not a URL)
+        if after and len(before) <= 30 and " " not in before:
+            project_name = before
+            task_text = after
+    log_telegram_message(update.effective_user.id, f"/team {raw}")
+    await _enqueue_task(update, task_text, use_team=True, project_name=project_name)
 
 
 async def cmd_report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -171,16 +182,51 @@ async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_allowed(update):
         return
-    pending = list_tasks("pending")
+    from datetime import datetime
+    from memory import _load as mem_load
+    from task_queue import _load as tq_load
+
+    lines = [f"📊 에이전트 상태  {datetime.now().strftime('%m-%d %H:%M')}"]
+
+    # 실행 중 작업
     if _current_task_info:
         tid = _current_task_info.get("tid", "?")
-        text = _current_task_info.get("text", "")[:60]
-        msg = f"⚙️ 실행 중 [{tid}]: {text}\n📋 대기 중: {len(pending)}개"
-    elif pending:
-        msg = f"⏸ 대기 중인 작업: {len(pending)}개"
+        text = _current_task_info.get("text", "")[:50]
+        lines.append(f"\n⚙️ 실행 중 [{tid}]: {text}")
     else:
-        msg = "✅ 대기 중 (작업 없음)"
-    await update.message.reply_text(msg)
+        lines.append("\n💤 실행 중인 작업 없음")
+
+    # 큐 상태
+    all_tasks = tq_load()
+    pending = [t for t in all_tasks if t["status"] == "pending"]
+    done = [t for t in all_tasks if t["status"] == "done"]
+    urgent = [t for t in pending if t["priority"] in ("urgent", "high")]
+    lines.append(f"📋 대기: {len(pending)}개" + (f"  🔴 긴급/높음: {len(urgent)}개" if urgent else "") +
+                 f"  ✅ 완료: {len(done)}개")
+
+    # 메모리 상태
+    mem = mem_load()
+    facts = len(mem.get("facts", []))
+    prefs = len(mem.get("preferences", {}))
+    notes = len(mem.get("notes", []))
+    lines.append(f"🧠 메모리: 사실 {facts}개 / 설정 {prefs}개 / 메모 {notes}개")
+
+    # 마지막 동기화 시각 (facts에서 태그 탐색)
+    last_sync = ""
+    for f in reversed(mem.get("facts", [])):
+        if "[동기화:" in f.get("text", ""):
+            last_sync = f.get("date", "")[:16]
+            break
+    lines.append(f"🔄 마지막 동기화: {last_sync or '없음'}")
+
+    # 다음 스케줄
+    now = datetime.now()
+    from scheduler import AUTO_WORK_HOURS, DAILY_HOUR, NIGHT_WORK_HOUR
+    future_hours = sorted([h for h in AUTO_WORK_HOURS + [DAILY_HOUR, NIGHT_WORK_HOUR] if h > now.hour])
+    next_h = future_hours[0] if future_hours else AUTO_WORK_HOURS[0]
+    lines.append(f"⏰ 다음 자율 실행: {next_h:02d}:00")
+
+    await update.message.reply_text("\n".join(lines))
 
 
 async def cmd_checkout(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -326,11 +372,11 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await _enqueue_task(update, update.message.text, use_team=False)
 
 
-async def _enqueue_task(update: Update, task_text: str, use_team: bool):
+async def _enqueue_task(update: Update, task_text: str, use_team: bool, project_name: str = ""):
     _track_chat_id(update)
     chat_id = update.effective_chat.id
     priority = _detect_priority(task_text)
-    meta = {"chat_id": chat_id, "use_team": use_team}
+    meta = {"chat_id": chat_id, "use_team": use_team, "project_name": project_name}
     tid = add_task(task_text, priority, meta)
 
     pending = list_tasks("pending")
@@ -390,7 +436,8 @@ async def queue_worker(bot):
                 )
 
                 if use_team:
-                    coro = run_orchestrated_task(text, progress_callback=progress)
+                    project_name = meta.get("project_name", "")
+                    coro = run_orchestrated_task(text, progress_callback=progress, project_name=project_name)
                 else:
                     coro = run_agent(text, progress_callback=progress)
 
