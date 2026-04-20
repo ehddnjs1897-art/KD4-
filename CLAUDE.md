@@ -1,148 +1,93 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) and other AI
-assistants when working with this repository.
+This file provides guidance to Claude Code and other AI assistants working in this repository.
 
-## Repository Status
+## Repository Overview
 
-**This repository is currently uninitialized.** At the time this document was
-written, the repository contains no source code, no commit history, and no
-configuration files — only the `.git` directory and this `CLAUDE.md`.
-
-- **Repository**: `ehddnjs1897-art/KD4-`
-- **Default working branch for Claude**: `claude/add-claude-documentation-wN4sX`
-- **Language / stack**: not yet chosen
-- **Build system**: not yet chosen
-- **Tests**: none
-
-Because the project has not been scaffolded, there is no existing architecture,
-module layout, or set of conventions to describe. Sections below that would
-normally document the stack (build, test, lint, entry points, etc.) are
-intentionally left as placeholders. **Update this file as soon as the project
-is scaffolded** so future AI sessions have accurate guidance.
-
-## For the First Contributor / First AI Session
-
-When the project gets its first real commits, the agent doing that work should:
-
-1. Decide the language and tooling with the user (do not guess).
-2. Add a minimal but runnable scaffold (entry point, dependency manifest,
-   README).
-3. Immediately update this `CLAUDE.md` with the actual structure, commands,
-   and conventions — do not leave the placeholder text in place once real code
-   exists.
-4. Commit the scaffold and the updated `CLAUDE.md` together.
-
-Do not invent a stack, framework, or directory layout in order to fill this
-file out. If you are unsure what the project is supposed to be, ask the user
-first.
+**Repository**: `ehddnjs1897-art/KD4-`
+**Purpose**: Mac autonomous agent system — control desktop Claude from phone via Telegram. Surpasses OpenClaw with deep Mac integration, adaptive learning, and autonomous task queue processing.
 
 ## Codebase Structure
 
-_No source tree yet._ Once the project is scaffolded, document:
-
-- Top-level directories and what each one is for
-- Where the entry point lives
-- How modules are organized (by feature, by layer, etc.)
-- Where tests live relative to the code they cover
-- Any generated / vendored directories that should be ignored
+```
+KD4-/
+├── main.py               # Entry point: bot + scheduler + auto-recovery
+├── agent_engine.py       # Core agent loop (Sonnet 4.6 via claude CLI)
+├── orchestrator.py       # Multi-agent orchestrator (analyst→executor→validator)
+├── telegram_bot.py       # Telegram command handlers (17 commands)
+├── daily_scout.py        # File/conversation scanner & daily report
+├── scheduler.py          # 30m heartbeat + hourly auto-work + 2am deep work
+├── tools.py              # 24+ agent tools (unified registry)
+├── mac_tools.py          # Mac-native: AppleScript, clipboard, say, notify, calendar
+├── web_search.py         # DuckDuckGo search + URL fetch (no API key)
+├── memory.py             # Long-term memory (~/.claude-agent/memory.json)
+├── task_queue.py         # Priority queue (~/.claude-agent/tasks.json)
+├── agents/
+│   ├── analyst.py        # Analyst system prompt
+│   ├── executor.py       # Executor system prompt
+│   └── validator.py      # Validator system prompt
+├── requirements.txt
+├── .env.example
+├── start.sh              # Auto-installs playwright chromium on first run
+└── setup_autostart.sh    # launchd autostart
+```
 
 ## Development Workflows
 
-_No tooling configured yet._ Once chosen, document the exact commands here so
-AI assistants can run them without guessing. Typical entries:
+- **Install**: `pip install -r requirements.txt && playwright install chromium`
+- **Run locally**: `bash start.sh`
+- **Autostart**: `bash setup_autostart.sh`
+- **Logs**: `tail -f logs/agent.log`
+- **Stop all instances**: `pkill -f "python3 main.py"`
 
-- **Install dependencies**: _TBD_
-- **Run the app locally**: _TBD_
-- **Run tests**: _TBD_
-- **Run a single test**: _TBD_
-- **Lint**: _TBD_
-- **Format**: _TBD_
-- **Type-check**: _TBD_
-- **Build / package**: _TBD_
+## Environment Variables
 
-Prefer documenting one canonical command per task. If there are multiple ways
-to run something, pick the one contributors are expected to use.
+| Variable | Description |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | From @BotFather |
+| `TELEGRAM_ALLOWED_USER_ID` | Your Telegram user ID (security) |
+| `WORKSPACE_DIR` | Root dir for daily scout (default: `~`) |
+| `DAILY_REPORT_HOUR` | Hour for daily report (default: `9`) |
+| `AUTO_WORK_HOURS` | Comma-separated hours for auto-work (default: `8,10,12,14,16,18,20,22`) |
+| `NIGHT_WORK_HOUR` | Hour for deep overnight work (default: `2`) |
+
+## Telegram Commands
+
+**Execution**
+- `/do <task>` — single agent (Sonnet 4.6, Opus 4.7 advisor available)
+- `/team <task>` — analyst → executor → validator with retry
+- `/report` — scan files/conversations & daily report
+- `/checkout` — end-of-day wrap-up
+
+**Task Queue (persistent)**
+- `/task <text> [urgent|high|normal|low]`
+- `/tasks [pending|done|all]`
+- `/cancel <id>`, `/cleardone`
+
+**Memory (persistent)**
+- `/memory`, `/remember <fact>`, `/forget`
+
+**System**
+- `/screen`, `/sysinfo`, `/stop`, `/status`, `/menu`
+
+## Architecture
+
+1. **agent_engine.py** — ReAct loop: Claude CLI subprocess with `<tool_call>` XML parsing. Auto-injects long-term memory context.
+2. **tools.py** — 24+ tools. File I/O, bash, AppleScript, browser (Playwright), clipboard, screenshot, vision (`see_screen`), web search, memory, Opus advisor.
+3. **scheduler.py** — `schedule_loop` checks: 30m heartbeat → queue → timed auto-work → daily report.
+4. **task_queue.py + memory.py** — JSON persistence in `~/.claude-agent/`.
+5. **main.py** — `run_with_recovery()` auto-restarts on crash (exp backoff, max 20 attempts).
+
+## Autonomous Behaviors
+
+- **Every 30 minutes**: scan `HEARTBEAT.md` for user-written requests
+- **Every scheduled hour**: process task queue first, then scan for pending work
+- **2 AM**: deep work — process up to 10 queued tasks, scan filesystem
+- **After each task**: extract lessons → auto-save to memory
+- **9 AM**: daily report with scanned file context
 
 ## Git & Branch Conventions
 
-These conventions are enforced by the environment this repository runs in and
-must be followed by AI sessions:
-
-- **Never commit directly to `main`.** All work happens on feature branches.
-- **Claude sessions use the branch named in the session brief.** For this
-  repository the current Claude branch is
-  `claude/add-claude-documentation-wN4sX`. Future sessions may be assigned a
-  different branch — always use the one specified in the session, and create
-  it locally if it does not yet exist.
-- **Push with upstream tracking**: `git push -u origin <branch-name>`.
-- **Retry transient push/fetch failures** with exponential backoff (2s, 4s,
-  8s, 16s), up to 4 attempts. Do not retry on non-network errors.
-- **Do not force-push** to shared branches, and never force-push to `main`.
-- **Do not skip hooks** (`--no-verify`, `--no-gpg-sign`, etc.) unless the user
-  explicitly asks for it. Fix the underlying issue instead.
-- **Create new commits rather than amending.** If a pre-commit hook fails,
-  the commit did not happen — fix the issue, re-stage, and create a new
-  commit (do not `--amend`).
-- **Do not open a pull request unless the user explicitly asks for one.**
-
-### Commit messages
-
-Until the project establishes its own style, keep commit messages:
-
-- Short imperative subject line (≤ 72 chars), e.g. `Add initial scaffold`
-- Optional body explaining _why_ the change was made, not _what_ (the diff
-  shows the what)
-
-## GitHub Integration
-
-AI sessions in this repository interact with GitHub **only** through the
-GitHub MCP tools (prefixed `mcp__github__`). The `gh` CLI is not available.
-Scope is restricted to `ehddnjs1897-art/kd4-` — do not attempt to read from
-or write to any other repository.
-
-Be conservative with GitHub side effects:
-
-- Do not post PR comments unless a reply is genuinely necessary.
-- Do not create issues or PRs without explicit user instruction.
-- Never force-push to `main` even if asked; warn the user instead.
-
-## Coding Conventions (to be filled in)
-
-Once code exists, document here:
-
-- Naming conventions (files, types, functions, constants)
-- Import ordering / module boundaries
-- Error-handling style
-- Logging style
-- Any project-specific idioms that an AI should match rather than "improve"
-
-Until then, a Claude session adding first code to this repository should
-default to the idiomatic style of whatever language is chosen, and should
-**not** introduce speculative abstractions, config layers, or helper
-utilities beyond what the immediate task needs.
-
-## Things Not To Do
-
-These rules apply to every AI session in this repository, including
-bootstrapping ones:
-
-- Do not create files unless they are necessary for the requested task.
-- Do not add README.md or other docs files unless the user asks.
-- Do not add backwards-compatibility shims, feature flags, or fallback code
-  for scenarios that cannot actually occur.
-- Do not add error handling or input validation at internal boundaries —
-  only at true system boundaries (user input, external APIs).
-- Do not leave `// removed`, `// old`, or similar tombstone comments after
-  deleting code. Just delete it.
-- Do not add docstrings, type annotations, or comments to code you did not
-  change.
-- Do not refactor code that is adjacent to, but not part of, the task.
-
-## When This File Is Out Of Date
-
-If you, as an AI assistant, start a task in this repository and find that the
-actual code no longer matches this document — for example, source files exist
-but the "Codebase Structure" section is still the placeholder — **update this
-file as part of your change**. Keeping `CLAUDE.md` accurate is part of every
-task that materially changes the codebase, not a separate chore.
+- Never commit to `main`
+- Current Claude branch: `claude/dev-status-report-Sm5Dx`
+- Push with: `git push -u origin <branch-name>`
