@@ -86,25 +86,36 @@ async def main():
 
 
 def run_with_recovery():
-    """크래시 시 최대 5회, 지수 백오프로 자동 재시작."""
+    """크래시 시 최대 20회, 지수 백오프로 자동 재시작. 토큰 오류 시 .env 재로드."""
     retry_delay = 5
     max_delay = 300
     attempt = 0
     while True:
         attempt += 1
+        load_dotenv(override=True)  # 재시작마다 .env 재로드 (토큰 변경 반영)
         try:
             asyncio.run(main())
             break
         except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
-            logger.exception(f"[시도 {attempt}] 봇 크래시: {e}")
-            if attempt > 20:
-                logger.error("20회 연속 실패 — 종료")
-                break
-            logger.info(f"{retry_delay}초 후 자동 재시작...")
-            time.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, max_delay)
+            err = str(e).lower()
+            if "401" in err or "unauthorized" in err or "invalid token" in err:
+                logger.error(f"❌ 텔레그램 토큰 오류: {e}")
+                logger.error("➡ .env 파일의 TELEGRAM_BOT_TOKEN을 확인하세요.")
+                logger.error("➡ fix_token.sh 스크립트로 토큰을 교체하고 재시작하세요.")
+                logger.info("30초 후 .env 재로드 후 재시도...")
+                time.sleep(30)
+                load_dotenv(override=True)
+                attempt = 0  # 토큰 오류는 카운트 리셋
+            else:
+                logger.exception(f"[시도 {attempt}] 봇 크래시: {e}")
+                if attempt > 20:
+                    logger.error("20회 연속 실패 — 종료")
+                    break
+                logger.info(f"{retry_delay}초 후 자동 재시작...")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_delay)
 
 
 if __name__ == "__main__":
